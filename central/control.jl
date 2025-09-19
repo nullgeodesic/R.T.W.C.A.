@@ -1,5 +1,5 @@
 """
-September 11 2025
+September 19 2025
 Author: Levi Malmström
 """
 
@@ -84,8 +84,18 @@ function initialize_camera(position; direction=[0.0,0.0], beta=0.0::Real, pointi
             
             h=rho_vert*(j-0.5)-H
             theta=atan(sqrt(w^2 + h^2))
-            if w!=0
-                phi=sign(h)*acos(w/sqrt(w^2 + h^2))
+
+            #phi=sign(h)*acos(w/sqrt(w^2 + h^2))
+            if w>0
+               phi=atan(h/w)
+            elseif w<0 && h>=0
+                phi=atan(h/w)+pi
+            elseif w<0 && h<0
+                phi=atan(h/w)-pi
+            elseif w==0 && h>0
+                phi=pi/2
+            elseif w==0 && h<0
+                phi=-pi/2
             else
                 phi=0
             end
@@ -94,7 +104,7 @@ function initialize_camera(position; direction=[0.0,0.0], beta=0.0::Real, pointi
             S[i,j,6]=-sin(theta)*cos(phi)
             S[i,j,7]=-sin(theta)*sin(phi)
             S[i,j,8]=-cos(theta)
-            #geometrically, we have projected the pixels from the canvas onto a sphere
+            #geometrically, we have projected the pixels from the canvas at z=1 onto a sphere
             #but the points actually are velocity vectors, so we need to negate them,
             #since the rays are traveling into the camera, not out.
         end
@@ -222,60 +232,6 @@ function calc_christoffel_udd(position,index)
     return Christoffel
     end
 
-
-function prep_rays_plot(;nposition=[0,0,0,0],npointing=[0,0,0],nbeta=0.99,ndirection=[0,0])
-    S = initialize_camera(nposition,pointing=npointing,beta=nbeta,direction=ndirection)
-
-    dimensions=size(S)
-
-    x = zeros(dimensions[1]*dimensions[2])
-    y = zeros(dimensions[1]*dimensions[2])
-    z = zeros(dimensions[1]*dimensions[2])
-
-    for i in 1:dimensions[1]
-        for j in 1:dimensions[2]
-            k=(i-1)*dimensions[2] + j
-            x[k]=S[i,j,6]
-            y[k]=S[i,j,7]
-            z[k]=S[i,j,8]
-        end
-    end
-
-    N_i=floor(Int,dimensions[1]/10)
-    N_j=floor(Int,dimensions[2]/10)
-
-    x2 = zeros(N_i*N_j)
-    y2 = zeros(N_i*N_j)
-    z2 = zeros(N_i*N_j)
-
-    for i in 1:(N_i*N_j)
-        x2[i]=x[100*i]
-        y2[i]=y[100*i]
-        z2[i]=z[100*i]
-    end
-
-    return x2,y2,z2
-    end
-
-
-function test_nullness(;pointer=[0,0,0],speed=0.0,dir=[0,0])
-    Rays = initialize_camera([0,0,0,0],pointing=pointer,beta=speed,direction=dir)
-    println("Has NAN?" * string(find_NAN(Rays)))
-    dims=size(Rays)
-    Check=ones(dims[1],dims[2])
-    n=calc_lower_metric([0,0,0,0])
-    S=0
-    for i in 1:dims[1]
-        for j in 1:dims[2]
-            dS=transpose(Rays[i,j,5:8])*n*Rays[i,j,5:8]
-            S = S + dS
-            Check[i,j]=dS
-        end
-    end
-    return Check,S
-    end
-
-
 function find_NaN(array)
     has_nan=false
     for n in array
@@ -304,12 +260,24 @@ function calc_spectral_emission_coeficient(position_velocity,frequency)
     return j_nu
 end
 
+function is_fire(position)
+    x_in_bottom= -0.02<=position[2]<=0.03
+    y_in_left= 0<=position[3]<=0.03
+    z_in_block= 0<=position[4]<=0.01
+
+    if x_in_bottom && y_in_left && z_in_block
+        pos_in_hole = position[2]>0.01 && position[3]>0.01
+        return !(pos_in_hole)
+    else
+        return false
+    end
+end
 
 function calc_spectral_absorbtion_coeficient(position_velocity,frequency)
     #units are m^-1 with default scale
     #Set a_nu=760 for a real value from abstract of B.L. Wersborg, L.K. Fox, J.B. Howard 1974
     #not public :(
-    if abs(position_velocity[2]) <= 0.01 && abs(position_velocity[3]) <= 0.01 && abs(position_velocity[4]) <= 0.01
+    if is_fire(position_velocity[1:4])
         a_nu=50/map_scale
         return a_nu
     else
@@ -468,8 +436,8 @@ function calc_xyY(ray,colors,colors_freq)
     return CIExyY
 end
 
-function alltogethernow(;camera_pos=[0,0,0,-0.03],camera_dir=[0.0,0.0],speed=0.0,
-                        camera_point=[0.0,0.0,0.0],x_pix=40,stepsize=0.0001,n_steps=500,colors=[400,550,700])
+function alltogethernow(;camera_pos=[0,0,0,-0.05],camera_dir=[0.0,0.0],speed=0.0,
+                        camera_point=[0.0,0.0,0.0],x_pix=40,stepsize=0.0001,n_steps=1000,colors=[400,550,700])
     #initialize rays
     ray_matrix=initialize_camera(camera_pos,direction=camera_dir,beta=speed,pointing=camera_point,
                                  horizontal_pixels=x_pix,colors=colors)
@@ -498,5 +466,5 @@ function alltogethernow(;camera_pos=[0,0,0,-0.03],camera_dir=[0.0,0.0],speed=0.0
     scaler=scaleminmax(xyY,0,comp3(max_pixel_val))
     xyY_img=scaler.(xyY_img)
     RGB_img=convert.(RGB,xyY_img)
-    return RGB_img
+    return transpose(reverse(RGB_img,dims=2))
 end
