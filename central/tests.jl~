@@ -17,7 +17,9 @@ using Images
 #Pkg.add("ImageMagick")
 using ImageMagick
 using ImageView
+#Pkg.add("FileIO")
 using FileIO
+
 
 #CONSTANTS
 #Planck Constant in J/Hz
@@ -36,7 +38,6 @@ cie_matrix=[
 [442.0 599.8 501.1 568.8 530.9 437.0 459.0];
 [0.0624 0.0264 0.0490 0.0213 0.0613 0.0845 0.0385];
     [0.0374 0.0323 0.0382 0.0247 0.0322 0.0278 0.0725]]
-
 
 
 """
@@ -228,6 +229,16 @@ function calc_christoffel_udd(position,index)
     return Christoffel
     end
 
+function find_NaN(array)
+    has_nan=false
+    for n in array
+        if isnan(n)
+            has_nan=true
+        end
+    end
+    return has_nan
+end
+
 function calc_planck(T,nu)
     B_nu=2*h*nu^3/(c^2*(exp(h*nu/(k_B*T))-1))
     return B_nu
@@ -236,7 +247,7 @@ end
 
 function get_temp(position)
     #gives the temperature in Kelvin
-    return 5778
+    return 10000
 end
 
 function calc_spectral_emission_coeficient(position_velocity,frequency)
@@ -260,7 +271,7 @@ function is_fire(position)
 end
 
 function is_fire2(position)
-    if abs(position[2])<=0.01 && abs(position[3])<=0.01 && -0.01<=position[4]<=0.5
+    if abs(position[2])<=0.015 && abs(position[3])<=0.015 && abs(position[4])<=0.015
         return true
     else
         return false
@@ -330,6 +341,26 @@ function RK4_Step(Ray,raylength,stepsize,colors_freq)
     return Ray + stepsize*(k1 + 2*k2 + 2*k3 + k4)/6
 end
 
+
+function test_rk4(init_ray,raylength,stepsize,colors_freq,n_steps)
+    ray=init_ray
+    x=zeros(n_steps+1)
+    y=zeros(n_steps+1)
+    z=zeros(n_steps+1)
+    x[1]=init_ray[2]
+    y[1]=init_ray[3]
+    z[1]=init_ray[4]
+    
+    for i in 1:n_steps
+        #stepsize is negative becaues we're going back in time
+        ray=RK4_Step(ray,raylength,-stepsize,colors_freq)        
+        x[i+1]=ray[2]
+        y[i+1]=ray[3]
+        z[i+1]=ray[4]
+    end
+    return ray,x,y,z
+end
+
 function Heaviside(x)
     if x >= 0
         return 1
@@ -369,7 +400,23 @@ function cie_z(wavelength)
     return z
 end
 
-function ray_to_I_lambda(ray,colors,colors_freq)
+function test_cie_functs()
+    wavelengths=zeros(Int,351)
+    x=zeros(351)
+    y=zeros(351)
+    z=zeros(351)
+    for i in 1:351
+        wavelengths[i]=i+374
+        x[i]=cie_x(wavelengths[i])
+        y[i]=cie_y(wavelengths[i])
+        z[i]=cie_z(wavelengths[i])
+    end
+    plot(wavelengths,x)
+    plot!(wavelengths,y)
+    plot!(wavelengths,z)
+end
+
+function calc_xyY(ray,colors,colors_freq)
     n_colors=length(colors)
     I_lambdas=zeros(n_colors)
     for i in 1:n_colors
@@ -377,11 +424,6 @@ function ray_to_I_lambda(ray,colors,colors_freq)
         #since colors are in nm, this gives the spectral radiance in W sr^-1 m^-2 nm^-1
         I_lambdas[i]=ray[7+2*i]*colors_freq[i]^3*c/colors[i]^2
     end
-    return I_lambdas
-end
-
-function calc_xyY(ray,colors,colors_freq)
-    I_lambdas=ray_to_I_lambda(ray,colors,colors_freq)
     
     I_interpolation=linear_interpolation(colors,I_lambdas)
     
@@ -400,8 +442,7 @@ function calc_xyY(ray,colors,colors_freq)
 end
 
 function alltogethernow(;camera_pos=[0,0,0,-0.05],camera_dir=[0.0,0.0],speed=0.0,
-                        camera_point=[0.0,0.0,0.0],x_pix=40,stepsize=0.0001,n_steps=1000,colors=[400,550,700],
-                        returnrays=false)
+                        camera_point=[0.0,0.0,0.0],x_pix=40,stepsize=0.0001,n_steps=1000,colors=[400,550,700])
     #initialize rays
     ray_matrix=initialize_camera(camera_pos,direction=camera_dir,beta=speed,pointing=camera_point,
                                  horizontal_pixels=x_pix,colors=colors)
@@ -421,39 +462,14 @@ function alltogethernow(;camera_pos=[0,0,0,-0.05],camera_dir=[0.0,0.0],speed=0.0
             for k in 1:n_steps
                 ray=RK4_Step(ray,raylength,-stepsize,colors_freq)               
             end
-
-            if returnrays
-                ray_matrix[i,j,:]=ray
-            end
             #calculate pixel value
-            xyY_img[i,j]=calc_xyY(ray,colors,colors_freq)
+            xyY_img[i,j]=calc_xyY(ray,colors,colors_freq)            
         end
     end
 
-    #check that any rays even hit anything, and return a blank image if they didn't
     max_pixel_val=maxfinite(xyY_img)
-    if comp3(max_pixel_val)<=0
-        println("Image blank")
-        if returnrays
-            return zeros(RGB{N0f16},size(ray_matrix,2),size(ray_matrix,1)),ray_matrix
-        else
-            return zeros(RGB{N0f16},size(ray_matrix,2),size(ray_matrix,1))
-        end
-    end
-    
-    #scale the image
-    scaler=scaleminmax(0,comp3(max_pixel_val))
-    for i in 1:size(xyY_img,1)
-        for j in 1:size(xyY_img,2)
-            xyY_img[i,j]=xyY{Float64}(comp1(xyY_img[i,j]),comp2(xyY_img[i,j]),scaler(comp3(xyY_img[i,j])))
-        end
-    end
-
-    #convert to rgb and return
-    RGB_img=convert.(RGB{N0f16},xyY_img)
-    if returnrays
-        return transpose(reverse(RGB_img,dims=2)),ray_matrix
-    else
-        return transpose(reverse(RGB_img,dims=2))
-    end
+    scaler=scaleminmax(xyY,0,comp3(max_pixel_val))
+    xyY_img=scaler.(xyY_img)
+    RGB_img=convert.(RGB{N0f8},xyY_img)
+    return transpose(reverse(RGB_img,dims=2))
 end
