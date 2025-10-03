@@ -1,6 +1,6 @@
 """
-v0.3.0
-September 19 2025
+v0.3.1
+October 1 2025
 Author: Levi Malmström
 """
 
@@ -21,23 +21,32 @@ using FileIO
 
 #CONSTANTS
 #Planck Constant in J/Hz
-h=6.62607015e-34
+const h=6.62607015e-34
 #Reduced Planck Constant in J*s
-hbar=h/(2*pi)
+const hbar=h/(2*pi)
 #Speed of light in m/s
-c=299792458
+const c=299792458
 #Boltzman Constant in J/K
-k_B=1.380649e-23
+const k_B=1.380649e-23
 #How many meters corespond to one unit of the map
-map_scale=1
+const map_scale=1
 #Color match function fit values
-cie_matrix=[
+const cie_matrix=[
 [0.362 1.056 -0.065 0.821 0.286 1.217 0.681];
 [442.0 599.8 501.1 568.8 530.9 437.0 459.0];
 [0.0624 0.0264 0.0490 0.0213 0.0613 0.0845 0.0385];
-    [0.0374 0.0323 0.0382 0.0247 0.0322 0.0278 0.0725]]
-
-
+[0.0374 0.0323 0.0382 0.0247 0.0322 0.0278 0.0725]]
+#Dormand-Prince Butcher tableau
+const DP_Butcher=[
+[0 0 0 0 0 0 0 0];
+[1/5 1/5 0 0 0 0 0 0];
+[3/10 3/40 9/40 0 0 0 0 0];
+[4/5 44/45 -56/15 32/9 0 0 0 0];
+[8/9 19372/6561 -25360/2187 64448/6561 -212/729 0 0 0];
+[1 9017/3168 -355/33 46732/5247 49/176 -5103/18656 0 0];
+[1 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
+[0 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
+[0 5179/57600 0 7571/16695 393/640 -92097/339200 187/2100 1/40]]
 
 """
     initialize_camera(position;direction=[0.0,0.0],beta=0.0::Real,pointing=[0.0,0.0,0.0],
@@ -330,6 +339,74 @@ function RK4_Step(Ray,raylength,stepsize,colors_freq)
     return Ray + stepsize*(k1 + 2*k2 + 2*k3 + k4)/6
 end
 
+function RKDP_Step(Ray,slope_last,raylength::Integer,stepsize::Real,colors_freq,abs_tol,rel_tol,prev_rejected::Bool,
+                   max_dt::Real)
+    #Runge-Kutta Method -- Dormand-Prince method
+    #Calculating k's
+    k1 = slope_last
+    k2 = calc_ray_derivative(Ray + k1*stepsize*DP_Butcher[2,2], raylength,colors_freq)
+    k3 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[3,2] + k2*DP_Butcher[3,3]),raylength,colors_freq)
+    k4 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[4,2] + k2*DP_Butcher[4,3] + k3*DP_Butcher[4,4]),
+                             raylength,colors_freq)
+    k5 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[5,2] + k2*DP_Butcher[5,3] + k3*DP_Butcher[5,4] +
+        k4*DP_Butcher[5,5]),raylength, colors_freq)
+    k6 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[6,2] + k2*DP_Butcher[6,3] + k3*DP_Butcher[6,4] +
+        k4*DP_Butcher[6,5] + k5*DP_Butcher[6,6]),raylength, colors_freq)
+    
+    next_slope=k1*DP_Butcher[7,2] + k3*DP_Butcher[7,4] + k4*DP_Butcher[7,5] + k5*DP_Butcher[7,6] +
+        k6*DP_Butcher[7,7]
+    
+    k7 = calc_ray_derivative(Ray + stepsize*next_slope,raylength, colors_freq)
+    
+    #Calculating y's
+    y = Ray + stepsize*slope_last
+    y_hat = Ray + stepsize*(k1*DP_Butcher[9,2] + k3*DP_Butcher[9,4] + k4*DP_Butcher[9,5] + k5*DP_Butcher[9,6] +
+        k6*DP_Butcher[9,7] + k7*DP_Butcher[9,8])
+
+    #Estimate error
+    delta_y = y-y_hat
+    error=0
+    for i in 1:raylength
+        tol = abs_tol[i]+max(abs(Ray[i]),abs(y[i]))*rel_tol[i]
+        error += (delta_y[i]/tol)^2
+    end
+    error=sqrt(error/raylength)
+
+    """
+    if isnan(stepsize)
+        println(true)
+    end
+    """
+    
+    #decide next step
+    #calc size of next step
+    new_stepsize=0.9*stepsize*(1/error)^(1/5)
+
+    if abs(new_stepsize)>max_dt
+        new_stepsize=-max_dt
+    end
+    
+    if error == 0 || !isfinite(new_stepsize)
+        #error small enough; send updated stats marked as accepted, with same step size (to keep out NaN's)
+        return y,next_slope,stepsize,false
+    elseif error > 1
+        #error too large; send back to manager marked as rejected, with new step size
+        if prev_rejected && abs(new_stepsize)>=abs(stepsize)
+            #make sure stepsize goes down when the error is too large
+            new_stepsize=stepsize/2
+        end
+        return Ray,slope_last,new_stepsize,true
+    else
+        #error small enough; send updated stats marked as accepted, with new step size
+        #keep stepsize from increasing quickly
+        if abs(new_stepsize)>5*abs(stepsize)
+            new_stepsize=5*stepsize
+        end
+        return y,next_slope,new_stepsize,false
+    end
+end
+
+
 function Heaviside(x)
     if x >= 0
         return 1
@@ -422,6 +499,89 @@ function alltogethernow(;camera_pos=[0,0,0,-0.05],camera_dir=[0.0,0.0],speed=0.0
                 ray=RK4_Step(ray,raylength,-stepsize,colors_freq)               
             end
 
+            if returnrays
+                ray_matrix[i,j,:]=ray
+            end
+            #calculate pixel value
+            xyY_img[i,j]=calc_xyY(ray,colors,colors_freq)
+        end
+    end
+
+    #check that any rays even hit anything, and return a blank image if they didn't
+    max_pixel_val=maxfinite(xyY_img)
+    if comp3(max_pixel_val)<=0
+        println("Image blank")
+        if returnrays
+            return zeros(RGB{N0f16},size(ray_matrix,2),size(ray_matrix,1)),ray_matrix
+        else
+            return zeros(RGB{N0f16},size(ray_matrix,2),size(ray_matrix,1))
+        end
+    end
+    
+    #scale the image
+    scaler=scaleminmax(0,comp3(max_pixel_val))
+    for i in 1:size(xyY_img,1)
+        for j in 1:size(xyY_img,2)
+            xyY_img[i,j]=xyY{Float64}(comp1(xyY_img[i,j]),comp2(xyY_img[i,j]),scaler(comp3(xyY_img[i,j])))
+        end
+    end
+
+    #convert to rgb and return
+    RGB_img=convert.(RGB{N0f16},xyY_img)
+    if returnrays
+        return transpose(reverse(RGB_img,dims=2)),ray_matrix
+    else
+        return transpose(reverse(RGB_img,dims=2))
+    end
+end
+
+function alltogethernow_RKDP(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0,
+                        camera_point=[0.0,0.0,0.0],x_pix=40,dt=1e-3,max_steps=1e3,colors=[400,550,700],
+                        returnrays=false,tolerance=1e-8,max_dt=1e-1,fov_hor=85::Real, fov_vert=60::Real)
+    #initialize rays
+    ray_matrix=initialize_camera(camera_pos,direction=camera_dir,beta=speed,pointing=camera_point,
+                                 horizontal_pixels=x_pix,colors=colors,fov_hor=fov_hor, fov_vert=fov_vert)
+    #initialize xyY pixels
+    xyY_img=Array{xyY{Float64}}(undef,size(ray_matrix,1),size(ray_matrix,2))
+
+    n_colors=length(colors)
+    raylength=8+2*n_colors
+    f(x)=c*1e9/x
+
+    #initialize colors_freq
+    colors_freq=f.(colors)
+
+    #make tolerance arrays
+    abs_tol=fill(1e-4,length(ray_matrix[1,1,:]))
+    rel_tol=fill(1e-4,length(ray_matrix[1,1,:]))
+
+    #flip to back in time
+    dt=-dt
+
+    for i in 1:size(ray_matrix,1)
+        for j in 1:size(ray_matrix,2)
+            inner_dt=dt
+            ray=ray_matrix[i,j,:]
+            #integrate ray
+            raytrace=true
+            shared_slope=calc_ray_derivative(ray,raylength,colors_freq)
+            rejected=false
+            step_count=0
+            
+            while raytrace
+                dt_old=inner_dt
+                ray,shared_slope,inner_dt,rejected=RKDP_Step(ray,shared_slope,raylength,inner_dt,colors_freq,
+                                                       abs_tol, rel_tol,rejected,max_dt)
+                step_count+=1
+                #my current termination condition
+                min_optical_depth=minimum(ray[9:2:end])
+                dist_from_origin=sqrt(ray[2]^2 + ray[3]^2 + ray[4]^2)
+                if step_count>=max_steps || min_optical_depth>=-log(tolerance) || dist_from_origin > 0.7
+                    #println(step_count," ",dt_old," ",inner_dt)
+                    raytrace=false
+                end
+            end
+            
             if returnrays
                 ray_matrix[i,j,:]=ray
             end
