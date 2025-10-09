@@ -1,6 +1,6 @@
 """
-v0.3.1
-October 1 2025
+v0.3.2
+October 3 2025
 Author: Levi Malmström
 """
 
@@ -18,6 +18,7 @@ using Images
 using ImageMagick
 using ImageView
 using FileIO
+
 
 #CONSTANTS
 #Planck Constant in J/Hz
@@ -47,6 +48,21 @@ const DP_Butcher=[
 [1 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
 [0 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
 [0 5179/57600 0 7571/16695 393/640 -92097/339200 187/2100 1/40]]
+
+include("geometry.jl")
+include("source_model.jl")
+include("color_theory.jl")
+include("integrators.jl")
+
+
+function Heaviside(x)
+    if x >= 0
+        return 1
+    else
+        return 0
+    end
+end
+
 
 """
     initialize_camera(position;direction=[0.0,0.0],beta=0.0::Real,pointing=[0.0,0.0,0.0],
@@ -129,352 +145,9 @@ function initialize_camera(position; direction=[0.0,0.0], beta=0.0::Real, pointi
         end
     end
     return S
-    end
-
-
-function gen_intrinsic_rotation_matrix(pointing=[0,0,0])
-    #generate rotation matrix
-    #'roll'
-    R_x=zeros(4,4)
-    R_x[1,1]=1
-    R_x[2,2]=1
-    R_x[3,3]=cos(pointing[1])
-    R_x[4,3]=sin(pointing[1])
-    R_x[3,4]=-sin(pointing[1])
-    R_x[4,4]=cos(pointing[1])
-
-    #'pitch'
-    R_y=zeros(4,4)
-    R_y[1,1]=1
-    R_y[2,2]=cos(pointing[2])
-    R_y[4,2]=-sin(pointing[2])
-    R_y[3,3]=1
-    R_y[2,4]=sin(pointing[2])
-    R_y[4,4]=cos(pointing[2])
-
-    #'yaw'
-    R_z=zeros(4,4)
-    R_z[1,1]=1
-    R_z[2,2]=cos(pointing[3])
-    R_z[3,2]=sin(pointing[3])
-    R_z[2,3]=-sin(pointing[3])
-    R_z[3,3]=cos(pointing[3])
-    R_z[4,4]=1
-
-    R=R_z*R_y*R_x
-    return R
-    end
-
-
-function gen_final_rotation_matrix(direction=[0,0])
-    #turn angle coords into cartesion direction
-    d=[sin(direction[1])*cos(direction[2]),
-                             sin(direction[1])*sin(direction[2]),
-       cos(direction[1])]
-    
-    #perpendicular vector for rotation
-    k=cross([0,0,1],d)
-    mag_k = sqrt(transpose(k)*k)
-    if mag_k > 0
-        k=k/mag_k
-        
-        #cross product matrix
-        K=zeros(3,3)
-        K[1,2]=-k[3]
-        K[1,3]=k[2]
-        K[2,1]=k[3]
-        K[2,3]=-k[1]
-        K[3,1]=-k[2]
-        K[3,2]=k[1]
-        
-        #make a 3d rotation matrix
-        R_3d=Matrix{Float64}(I,3,3)
-        R_3d=R_3d + sin(direction[1])*K + (1-cos(direction[1]))*K*K
-        
-        #make it 4d
-        R=zeros(4,4)
-        R[1,1]=1
-        R[2:4,2:4]=R_3d
-        #transpose to give proper handedness
-        R=transpose(R)
-    else
-        println("Final Rotation: Camera velocity already aligned with FIDO z-axis; returning identity matrix")
-        R=Matrix{Float64}(I,4,4)
-    end
-    return R
 end
 
 
-function lorentz_boost_z(beta)
-    Lambda=zeros(4,4)
-    gamma=1/sqrt(1-beta^2)
-    Lambda[1,1]=gamma
-    Lambda[4,1]=-beta*gamma
-    Lambda[1,4]=-beta*gamma
-    Lambda[2,2]=1
-    Lambda[3,3]=1
-    Lambda[4,4]=gamma
-    return Lambda
-    end
-
-
-function calc_lower_metric(position)
-    #In this build I'm going with cartesian minkowski space
-    g=Matrix{Float64}(I,4,4)
-    g[1,1]=-1
-    return g
-    end
-
-function calc_local_vierbein(position)
-    #In this build I'm going with cartesian minkowski space
-    return Matrix{Float64}(I,4,4)
-    end
-
-
-function calc_christoffel_udd(position,index)
-    #In this build I'm going with cartesian minkowski space
-    Christoffel=0
-    return Christoffel
-    end
-
-function calc_planck(T,nu)
-    B_nu=2*h*nu^3/(c^2*(exp(h*nu/(k_B*T))-1))
-    return B_nu
-end
-
-
-function get_temp(position)
-    #gives the temperature in Kelvin
-    return 5778
-end
-
-function calc_spectral_emission_coeficient(position_velocity,frequency)
-    #j_nu = a_nu*B_nu for thermal emission
-    #units are m^-1 with default scale
-    j_nu=calc_spectral_absorbtion_coeficient(position_velocity,frequency)*calc_planck(get_temp(position_velocity[1:4]),frequency)/map_scale
-    return j_nu
-end
-
-function is_fire(position)
-    x_in_bottom= -0.02<=position[2]<=0.03
-    y_in_left= 0<=position[3]<=0.03
-    z_in_block= 0<=position[4]<=0.01
-
-    if x_in_bottom && y_in_left && z_in_block
-        pos_in_hole = position[2]>0.01 && position[3]>0.01
-        return !(pos_in_hole)
-    else
-        return false
-    end
-end
-
-function is_fire2(position)
-    if abs(position[2])<=0.01 && abs(position[3])<=0.01 && -0.01<=position[4]<=0.5
-        return true
-    else
-        return false
-    end
-end
-
-function calc_spectral_absorbtion_coeficient(position_velocity,frequency)
-    #units are m^-1 with default scale
-    #Set a_nu=760 for a real value from abstract of B.L. Wersborg, L.K. Fox, J.B. Howard 1974
-    #not public :(
-    if is_fire2(position_velocity[1:4])
-        a_nu=50/map_scale
-        return a_nu
-    else
-        return 0
-    end
-end
-
-
-function get_source_velocity(position)
-    return [1,0,0,0]
-end
-
-
-function calc_ray_derivative(Ray,raylength,colors_freq)
-    #calculate derivative at a point
-    slope= zeros(raylength)
-    for i in 1:4
-        #dx/dl=v
-        slope[i]=Ray[i+4]
-    end
-    for i in 5:8
-        #geodesic equation
-        a=0
-        for j in 5:8
-            for k in 5:8
-                a=a - calc_christoffel_udd(Ray[1:4],CartesianIndex(i-4,j-4,k-4))*Ray[j]*Ray[k]
-            end
-        end
-        slope[i]=a
-    end
-    for i in 9:raylength
-        if isodd(i)
-            #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
-            freq_shift=-transpose(get_source_velocity(Ray[1:4]))*calc_lower_metric(Ray[1:4])*Ray[5:8]
-            nu=colors_freq[ceil(Int,(i-8)/2)]*freq_shift
-            #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and the camera
-            slope[i]=-calc_spectral_emission_coeficient(Ray[1:8],nu)*exp(-Ray[i+1])/nu^3
-        else
-            #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
-            freq_shift=-transpose(get_source_velocity(Ray[1:4]))*calc_lower_metric(Ray[1:4])*Ray[5:8]
-            nu=-colors_freq[ceil(Int,(i-8)/2)]*freq_shift
-            #derivative of the optical depth which the ray "will" (hence the - sign) pass through in the "future" (+lambda) to get to the camera
-            slope[i]=-calc_spectral_absorbtion_coeficient(Ray[1:8],nu)*freq_shift
-        end
-    end
-    return slope
-end
-
-
-function RK4_Step(Ray,raylength,stepsize,colors_freq)
-    #Runge-Kutta Method -- Classic
-    k1 = calc_ray_derivative(Ray,raylength,colors_freq)
-    k2 = calc_ray_derivative(Ray + k1*stepsize/2, raylength,colors_freq)
-    k3 = calc_ray_derivative(Ray + k2*stepsize/2, raylength,colors_freq)
-    k4 = calc_ray_derivative(Ray + k3*stepsize, raylength,colors_freq)
-    return Ray + stepsize*(k1 + 2*k2 + 2*k3 + k4)/6
-end
-
-function RKDP_Step(Ray,slope_last,raylength::Integer,stepsize::Real,colors_freq,abs_tol,rel_tol,prev_rejected::Bool,
-                   max_dt::Real)
-    #Runge-Kutta Method -- Dormand-Prince method
-    #Calculating k's
-    k1 = slope_last
-    k2 = calc_ray_derivative(Ray + k1*stepsize*DP_Butcher[2,2], raylength,colors_freq)
-    k3 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[3,2] + k2*DP_Butcher[3,3]),raylength,colors_freq)
-    k4 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[4,2] + k2*DP_Butcher[4,3] + k3*DP_Butcher[4,4]),
-                             raylength,colors_freq)
-    k5 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[5,2] + k2*DP_Butcher[5,3] + k3*DP_Butcher[5,4] +
-        k4*DP_Butcher[5,5]),raylength, colors_freq)
-    k6 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[6,2] + k2*DP_Butcher[6,3] + k3*DP_Butcher[6,4] +
-        k4*DP_Butcher[6,5] + k5*DP_Butcher[6,6]),raylength, colors_freq)
-    
-    next_slope=k1*DP_Butcher[7,2] + k3*DP_Butcher[7,4] + k4*DP_Butcher[7,5] + k5*DP_Butcher[7,6] +
-        k6*DP_Butcher[7,7]
-    
-    k7 = calc_ray_derivative(Ray + stepsize*next_slope,raylength, colors_freq)
-    
-    #Calculating y's
-    y = Ray + stepsize*slope_last
-    y_hat = Ray + stepsize*(k1*DP_Butcher[9,2] + k3*DP_Butcher[9,4] + k4*DP_Butcher[9,5] + k5*DP_Butcher[9,6] +
-        k6*DP_Butcher[9,7] + k7*DP_Butcher[9,8])
-
-    #Estimate error
-    delta_y = y-y_hat
-    error=0
-    for i in 1:raylength
-        tol = abs_tol[i]+max(abs(Ray[i]),abs(y[i]))*rel_tol[i]
-        error += (delta_y[i]/tol)^2
-    end
-    error=sqrt(error/raylength)
-
-    """
-    if isnan(stepsize)
-        println(true)
-    end
-    """
-    
-    #decide next step
-    #calc size of next step
-    new_stepsize=0.9*stepsize*(1/error)^(1/5)
-
-    if abs(new_stepsize)>max_dt
-        new_stepsize=-max_dt
-    end
-    
-    if error == 0 || !isfinite(new_stepsize)
-        #error small enough; send updated stats marked as accepted, with same step size (to keep out NaN's)
-        return y,next_slope,stepsize,false
-    elseif error > 1
-        #error too large; send back to manager marked as rejected, with new step size
-        if prev_rejected && abs(new_stepsize)>=abs(stepsize)
-            #make sure stepsize goes down when the error is too large
-            new_stepsize=stepsize/2
-        end
-        return Ray,slope_last,new_stepsize,true
-    else
-        #error small enough; send updated stats marked as accepted, with new step size
-        #keep stepsize from increasing quickly
-        if abs(new_stepsize)>5*abs(stepsize)
-            new_stepsize=5*stepsize
-        end
-        return y,next_slope,new_stepsize,false
-    end
-end
-
-
-function Heaviside(x)
-    if x >= 0
-        return 1
-    else
-        return 0
-    end
-end
-
-function Selector_funct(x,y,z)
-    return y*(1-Heaviside(x))+z*Heaviside(x)
-end
-
-function cie_x(wavelength)
-    x=0
-    for i in 1:3
-        x=x+cie_matrix[1,i]*exp((-1/2)*((wavelength-cie_matrix[2,i])*Selector_funct(
-            wavelength-cie_matrix[2,i],cie_matrix[3,i],cie_matrix[4,i]))^2)
-    end
-    return x
-end
-
-function cie_y(wavelength)
-    y=0
-    for i in 1:2
-        y=y+cie_matrix[1,i+3]*exp((-1/2)*((wavelength-cie_matrix[2,i+3])*Selector_funct(
-            wavelength-cie_matrix[2,i+3],cie_matrix[3,i+3],cie_matrix[4,i+3]))^2)
-    end
-    return y
-end
-
-function cie_z(wavelength)
-    z=0
-    for i in 1:2
-        z=z+cie_matrix[1,i+5]*exp((-1/2)*((wavelength-cie_matrix[2,i+5])*Selector_funct(
-            wavelength-cie_matrix[2,i+5],cie_matrix[3,i+5],cie_matrix[4,i+5]))^2)
-    end
-    return z
-end
-
-function ray_to_I_lambda(ray,colors,colors_freq)
-    n_colors=length(colors)
-    I_lambdas=zeros(n_colors)
-    for i in 1:n_colors
-        #I_lambda=I_nu *c/lambda^2, where c=lambda*nu
-        #since colors are in nm, this gives the spectral radiance in W sr^-1 m^-2 nm^-1
-        I_lambdas[i]=ray[7+2*i]*colors_freq[i]^3*c/colors[i]^2
-    end
-    return I_lambdas
-end
-
-function calc_xyY(ray,colors,colors_freq)
-    I_lambdas=ray_to_I_lambda(ray,colors,colors_freq)
-    
-    I_interpolation=linear_interpolation(colors,I_lambdas)
-    
-    delXYZ(lambda,p) = I_interpolation(lambda)*[cie_x(lambda),cie_y(lambda),cie_z(lambda)]
-    domain = (minimum(colors),maximum(colors))
-    prob=IntegralProblem(delXYZ,domain)
-    CIEXYZ=solve(prob,HCubatureJL();reltol=1e-3,abstol=1e-3)   
-    if CIEXYZ[1] != 0 && CIEXYZ[2] != 0 && CIEXYZ[3] != 0
-        CIEXYZ=XYZ{Float64}(CIEXYZ[1],CIEXYZ[2],CIEXYZ[3])
-        CIExyY=xyY(CIEXYZ)
-    else
-        CIExyY=xyY{Float64}(1,1,0)
-    end
-    
-    return CIExyY
-end
 
 function alltogethernow(;camera_pos=[0,0,0,-0.05],camera_dir=[0.0,0.0],speed=0.0,
                         camera_point=[0.0,0.0,0.0],x_pix=40,stepsize=0.0001,n_steps=1000,colors=[400,550,700],
@@ -537,7 +210,7 @@ end
 
 function alltogethernow_RKDP(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0,
                         camera_point=[0.0,0.0,0.0],x_pix=40,dt=1e-3,max_steps=1e3,colors=[400,550,700],
-                        returnrays=false,tolerance=1e-8,max_dt=1e-1,fov_hor=85::Real, fov_vert=60::Real)
+                        returnrays=false,tolerance=1e-8,max_dt_scale=1e-2,fov_hor=85::Real, fov_vert=60::Real)
     #initialize rays
     ray_matrix=initialize_camera(camera_pos,direction=camera_dir,beta=speed,pointing=camera_point,
                                  horizontal_pixels=x_pix,colors=colors,fov_hor=fov_hor, fov_vert=fov_vert)
@@ -569,15 +242,13 @@ function alltogethernow_RKDP(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.
             step_count=0
             
             while raytrace
-                dt_old=inner_dt
                 ray,shared_slope,inner_dt,rejected=RKDP_Step(ray,shared_slope,raylength,inner_dt,colors_freq,
-                                                       abs_tol, rel_tol,rejected,max_dt)
+                                                             abs_tol, rel_tol,rejected,
+                                                             pad_max_dt2(ray[1:4], max_dt_scale))
                 step_count+=1
                 #my current termination condition
-                min_optical_depth=minimum(ray[9:2:end])
-                dist_from_origin=sqrt(ray[2]^2 + ray[3]^2 + ray[4]^2)
-                if step_count>=max_steps || min_optical_depth>=-log(tolerance) || dist_from_origin > 0.7
-                    #println(step_count," ",dt_old," ",inner_dt)
+                if step_count>=max_steps || minimum(ray[9:2:end])>=-log(tolerance) || sqrt(ray[2]^2 + ray[3]^2 +
+                    ray[4]^2) > 0.7
                     raytrace=false
                 end
             end
