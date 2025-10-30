@@ -1,6 +1,6 @@
 """
-v0.3.2
-October 3 2025
+v0.3.3
+October 9 2025
 Author: Levi Malmström
 """
 
@@ -16,9 +16,14 @@ using Integrals
 using Images
 #Pkg.add("ImageMagick")
 using ImageMagick
+#Pkg.add("ImageView")
 using ImageView
+#Pkg.add("FileIO")
 using FileIO
-
+#Pkg.add("ProfileView")
+using ProfileView
+using Profile
+using Base.Threads
 
 #CONSTANTS
 #Planck Constant in J/Hz
@@ -53,6 +58,7 @@ include("geometry.jl")
 include("source_model.jl")
 include("color_theory.jl")
 include("integrators.jl")
+include("tests.jl")
 
 
 function Heaviside(x)
@@ -148,75 +154,58 @@ function initialize_camera(position; direction=[0.0,0.0], beta=0.0::Real, pointi
 end
 
 
-
-function alltogethernow(;camera_pos=[0,0,0,-0.05],camera_dir=[0.0,0.0],speed=0.0,
-                        camera_point=[0.0,0.0,0.0],x_pix=40,stepsize=0.0001,n_steps=1000,colors=[400,550,700],
-                        returnrays=false)
-    #initialize rays
-    ray_matrix=initialize_camera(camera_pos,direction=camera_dir,beta=speed,pointing=camera_point,
-                                 horizontal_pixels=x_pix,colors=colors)
-    #initialize xyY pixels
-    xyY_img=Array{xyY{Float64}}(undef,size(ray_matrix,1),size(ray_matrix,2))
+function ray_kernel(ray,starting_timestep,tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,
+                    max_steps)
+    #integrate ray
+    dt=starting_timestep
+    raytrace=true
+    shared_slope=calc_ray_derivative(ray,raylength,colors_freq)
+    rejected=false
+    step_count=0
     
-    raylength=8+2*length(colors)
-    f(x)=c*1e9/x
-
-    #initialize colors_freq
-    colors_freq=f.(colors)
-    
-    for i in 1:size(ray_matrix,1)
-        for j in 1:size(ray_matrix,2)
-            ray=ray_matrix[i,j,:]
-            #integrate ray
-            for k in 1:n_steps
-                ray=RK4_Step(ray,raylength,-stepsize,colors_freq)               
-            end
-
-            if returnrays
-                ray_matrix[i,j,:]=ray
-            end
-            #calculate pixel value
-            xyY_img[i,j]=calc_xyY(ray,colors,colors_freq)
-        end
-    end
-
-    #check that any rays even hit anything, and return a blank image if they didn't
-    max_pixel_val=maxfinite(xyY_img)
-    if comp3(max_pixel_val)<=0
-        println("Image blank")
-        if returnrays
-            return zeros(RGB{N0f16},size(ray_matrix,2),size(ray_matrix,1)),ray_matrix
-        else
-            return zeros(RGB{N0f16},size(ray_matrix,2),size(ray_matrix,1))
+    while raytrace
+        ray,shared_slope,dt,rejected=RKDP_Step(ray,shared_slope,raylength,dt,colors_freq,
+                                                     abs_tol, rel_tol,rejected,
+                                                     pad_max_dt2(ray[1:4], max_dt_scale))
+        step_count+=1
+        #my current termination condition
+        if step_count>=max_steps || minimum(ray[9:2:end])>=-log(tolerance) || sqrt(ray[2]^2 + ray[3]^2 +
+            ray[4]^2) > 0.7
+            raytrace=false
         end
     end
     
-    #scale the image
-    scaler=scaleminmax(0,comp3(max_pixel_val))
-    for i in 1:size(xyY_img,1)
-        for j in 1:size(xyY_img,2)
-            xyY_img[i,j]=xyY{Float64}(comp1(xyY_img[i,j]),comp2(xyY_img[i,j]),scaler(comp3(xyY_img[i,j])))
-        end
-    end
-
-    #convert to rgb and return
-    RGB_img=convert.(RGB{N0f16},xyY_img)
-    if returnrays
-        return transpose(reverse(RGB_img,dims=2)),ray_matrix
-    else
-        return transpose(reverse(RGB_img,dims=2))
-    end
+    #calculate pixel value
+    xyY_pix=calc_xyY(ray,colors,colors_freq)
+    return ray,xyY_pix
 end
 
-function alltogethernow_RKDP(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0,
-                        camera_point=[0.0,0.0,0.0],x_pix=40,dt=1e-3,max_steps=1e3,colors=[400,550,700],
-                        returnrays=false,tolerance=1e-8,max_dt_scale=1e-2,fov_hor=85::Real, fov_vert=60::Real)
+function iterate_on_pix_range(ray_bundle,img_bundle,tolerance::Real,colors,colors_freq,
+                              raylength::Integer,abs_tol,rel_tol,max_dt_scale::Real,max_steps::Real,
+                              start_time::UInt64)
+    #println("Thread: ",threadid(),". bundle size: ",size(ray_bundle,1),".")
+    for i in 1:size(ray_bundle,1)
+        ray_bundle[i,:],img_bundle[i]=ray_kernel(ray_bundle[i,:],
+                                                     -pad_max_dt2(ray_bundle[i,1:4],max_dt_scale),
+                                                     tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,
+                                                     max_dt_scale,max_steps)
+    end
+    println("Elapsed time (ns): ",time_ns()-start_time, "; Thread ID: ",threadid())
+    return ray_bundle,img_bundle
+end
+
+
+function alltogethernow_RKDP(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
+                        camera_point=[0.0,0.0,0.0],x_pix=40,max_steps=1e3,colors=[400,550,700],
+                             returnrays=false,tolerance=1e-4::Real,max_dt_scale=1e-2::Real,fov_hor=85::Real,
+                             fov_vert=60::Real)
     #initialize rays
     ray_matrix=initialize_camera(camera_pos,direction=camera_dir,beta=speed,pointing=camera_point,
                                  horizontal_pixels=x_pix,colors=colors,fov_hor=fov_hor, fov_vert=fov_vert)
     #initialize xyY pixels
-    xyY_img=Array{xyY{Float64}}(undef,size(ray_matrix,1),size(ray_matrix,2))
-
+    #xyY_img=Array{xyY{Float64}}(undef,size(ray_matrix,1),size(ray_matrix,2))
+    xyY_img=zeros(xyY{Float64},x_pix,size(ray_matrix,2))
+    
     n_colors=length(colors)
     raylength=8+2*n_colors
     f(x)=c*1e9/x
@@ -225,42 +214,42 @@ function alltogethernow_RKDP(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.
     colors_freq=f.(colors)
 
     #make tolerance arrays
-    abs_tol=fill(1e-4,length(ray_matrix[1,1,:]))
-    rel_tol=fill(1e-4,length(ray_matrix[1,1,:]))
+    abs_tol=fill(tolerance,raylength)
+    rel_tol=fill(tolerance,raylength)
 
-    #flip to back in time
-    dt=-dt
+    y_pix=size(ray_matrix,2)
+    num_pix=x_pix*y_pix
+    println("num_pix= ",num_pix)
 
-    @timev for i in 1:size(ray_matrix,1)
-        for j in 1:size(ray_matrix,2)
-            inner_dt=dt
-            ray=ray_matrix[i,j,:]
-            #integrate ray
-            raytrace=true
-            shared_slope=calc_ray_derivative(ray,raylength,colors_freq)
-            rejected=false
-            step_count=0
-            
-            while raytrace
-                ray,shared_slope,inner_dt,rejected=RKDP_Step(ray,shared_slope,raylength,inner_dt,colors_freq,
-                                                             abs_tol, rel_tol,rejected,
-                                                             pad_max_dt2(ray[1:4], max_dt_scale))
-                step_count+=1
-                #my current termination condition
-                if step_count>=max_steps || minimum(ray[9:2:end])>=-log(tolerance) || sqrt(ray[2]^2 + ray[3]^2 +
-                    ray[4]^2) > 0.7
-                    raytrace=false
-                end
-            end
-            
-            if returnrays
-                ray_matrix[i,j,:]=ray
-            end
-            #calculate pixel value
-            xyY_img[i,j]=calc_xyY(ray,colors,colors_freq)
+    long_ray_matrix = reshape(ray_matrix,(num_pix,raylength))
+    long_xyY_img = reshape(xyY_img,num_pix)
+    
+    start_time =time_ns()
+
+    #Main Loop
+    chunks = Iterators.partition(1:num_pix,cld(num_pix,nthreads()))
+    tasks = []
+    for chunk in chunks
+        println(chunk)
+        push!(tasks,@spawn iterate_on_pix_range(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
+                                    deepcopy(tolerance),deepcopy(colors),deepcopy(colors_freq),
+                                    deepcopy(raylength),deepcopy(abs_tol),deepcopy(rel_tol),
+                                    deepcopy(max_dt_scale),deepcopy(max_steps),deepcopy(start_time)))
+    end
+    finished_bundles=fetch.(tasks)
+    
+    index_counter=1
+    for i in 1:length(finished_bundles)
+        for j in 1:size(finished_bundles[i][1],1)
+            long_ray_matrix[index_counter,:]=finished_bundles[i][1][j,:]
+            long_xyY_img[index_counter]=finished_bundles[i][2][j]
+            index_counter+=1
         end
     end
 
+    ray_matrix=reshape(long_ray_matrix,(x_pix,y_pix,raylength))
+    xyY_img=reshape(long_xyY_img,(x_pix,y_pix))
+    
     #check that any rays even hit anything, and return a blank image if they didn't
     max_pixel_val=maxfinite(xyY_img)
     if comp3(max_pixel_val)<=0
@@ -279,7 +268,8 @@ function alltogethernow_RKDP(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.
             xyY_img[i,j]=xyY{Float64}(comp1(xyY_img[i,j]),comp2(xyY_img[i,j]),scaler(comp3(xyY_img[i,j])))
         end
     end
-
+    
+    
     #convert to rgb and return
     RGB_img=convert.(RGB{N0f16},xyY_img)
     if returnrays

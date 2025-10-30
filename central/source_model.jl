@@ -18,7 +18,7 @@ end
 function calc_spectral_emission_coeficient(position_velocity,frequency)
     #j_nu = a_nu*B_nu for thermal emission
     #units are m^-1 with default scale
-    j_nu=calc_spectral_absorbtion_coeficient(position_velocity,frequency)*calc_planck(get_temp(position_velocity[1:4]),frequency)/map_scale
+    @views j_nu=calc_spectral_absorbtion_coeficient(position_velocity,frequency)*calc_planck(get_temp(position_velocity[1:4]),frequency)/map_scale
     return j_nu
 end
 
@@ -26,7 +26,7 @@ function calc_spectral_absorbtion_coeficient(position_velocity,frequency)
     #units are m^-1 with default scale
     #Set a_nu=760 for a real value from abstract of B.L. Wersborg, L.K. Fox, J.B. Howard 1974
     #not public :(
-    if is_fire2(position_velocity[1:4])
+    @views if is_fire3(position_velocity[1:4])
         a_nu=50/map_scale
         return a_nu
     else

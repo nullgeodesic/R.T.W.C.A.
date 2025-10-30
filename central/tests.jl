@@ -1,10 +1,8 @@
 """
-v0.3.2
-October 3 2025
+v0.3.3
+October 10 2025
 Author: Levi Malmström
 """
-
-include("control.jl")
 
 function find_NaN(array)
     has_nan=false
@@ -85,4 +83,16 @@ function check_spectrum(ray,colors)
     
     plot(colors,I_ray)
     plot!(fine_colors,I_planck)
+end
+
+function find_bad_color(color_array)
+    for i in eachindex(color_array)
+        if comp1(color_array[i]) > 0
+            println(i)
+        end
+    end
+end
+
+function test_full_code_speed()
+    return alltogethernow_RKDP(camera_pos=[0,0.0,0.0,-0.05],colors=colors,x_pix=50,max_dt_scale=1e-2)
 end

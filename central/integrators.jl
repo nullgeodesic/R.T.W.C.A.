@@ -15,24 +15,24 @@ function calc_ray_derivative(Ray,raylength,colors_freq)
         a=0
         for j in 5:8
             for k in 5:8
-                a=a - calc_christoffel_udd(Ray[1:4],CartesianIndex(i-4,j-4,k-4))*Ray[j]*Ray[k]
+                @views a=a - calc_christoffel_udd(Ray[1:4],CartesianIndex(i-4,j-4,k-4))*Ray[j]*Ray[k]
             end
         end
         slope[i]=a
     end
+
+    #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
+    @views freq_shift=-transpose(get_source_velocity(Ray[1:4]))*calc_lower_metric(Ray[1:4])*Ray[5:8]
+
     for i in 9:raylength
         if isodd(i)
-            #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
-            freq_shift=-transpose(get_source_velocity(Ray[1:4]))*calc_lower_metric(Ray[1:4])*Ray[5:8]
             nu=colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and the camera
-            slope[i]=-calc_spectral_emission_coeficient(Ray[1:8],nu)*exp(-Ray[i+1])/nu^3
+            @views slope[i]=-calc_spectral_emission_coeficient(Ray[1:8],nu)*exp(-Ray[i+1])/nu^3
         else
-            #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
-            freq_shift=-transpose(get_source_velocity(Ray[1:4]))*calc_lower_metric(Ray[1:4])*Ray[5:8]
             nu=-colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the optical depth which the ray "will" (hence the - sign) pass through in the "future" (+lambda) to get to the camera
-            slope[i]=-calc_spectral_absorbtion_coeficient(Ray[1:8],nu)*freq_shift
+            @views slope[i]=-calc_spectral_absorbtion_coeficient(Ray[1:8],nu)*freq_shift
         end
     end
     return slope
@@ -53,31 +53,31 @@ function RKDP_Step(Ray,slope_last,raylength::Integer,stepsize::Real,colors_freq,
     #Runge-Kutta Method -- Dormand-Prince method
     #Calculating k's
     k1 = slope_last
-    k2 = calc_ray_derivative(Ray + k1*stepsize*DP_Butcher[2,2], raylength,colors_freq)
-    k3 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[3,2] + k2*DP_Butcher[3,3]),raylength,colors_freq)
-    k4 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[4,2] + k2*DP_Butcher[4,3] + k3*DP_Butcher[4,4]),
+    @views k2 = calc_ray_derivative(Ray + k1*stepsize*DP_Butcher[2,2], raylength,colors_freq)
+    @views k3 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[3,2] + k2*DP_Butcher[3,3]),raylength,colors_freq)
+    @views k4 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[4,2] + k2*DP_Butcher[4,3] + k3*DP_Butcher[4,4]),
                              raylength,colors_freq)
-    k5 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[5,2] + k2*DP_Butcher[5,3] + k3*DP_Butcher[5,4] +
+    @views k5 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[5,2] + k2*DP_Butcher[5,3] + k3*DP_Butcher[5,4] +
         k4*DP_Butcher[5,5]),raylength, colors_freq)
-    k6 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[6,2] + k2*DP_Butcher[6,3] + k3*DP_Butcher[6,4] +
+    @views k6 = calc_ray_derivative(Ray + stepsize*(k1*DP_Butcher[6,2] + k2*DP_Butcher[6,3] + k3*DP_Butcher[6,4] +
         k4*DP_Butcher[6,5] + k5*DP_Butcher[6,6]),raylength, colors_freq)
     
-    next_slope=k1*DP_Butcher[7,2] + k3*DP_Butcher[7,4] + k4*DP_Butcher[7,5] + k5*DP_Butcher[7,6] +
+    @views next_slope=k1*DP_Butcher[7,2] + k3*DP_Butcher[7,4] + k4*DP_Butcher[7,5] + k5*DP_Butcher[7,6] +
         k6*DP_Butcher[7,7]
     
     k7 = calc_ray_derivative(Ray + stepsize*next_slope,raylength, colors_freq)
     
     #Calculating y's
     y = Ray + stepsize*slope_last
-    y_hat = Ray + stepsize*(k1*DP_Butcher[9,2] + k3*DP_Butcher[9,4] + k4*DP_Butcher[9,5] + k5*DP_Butcher[9,6] +
+    @views y_hat = Ray + stepsize*(k1*DP_Butcher[9,2] + k3*DP_Butcher[9,4] + k4*DP_Butcher[9,5] + k5*DP_Butcher[9,6] +
         k6*DP_Butcher[9,7] + k7*DP_Butcher[9,8])
 
     #Estimate error
     delta_y = y-y_hat
     error=0
     for i in 1:raylength
-        tol = abs_tol[i]+max(abs(Ray[i]),abs(y[i]))*rel_tol[i]
-        error += (delta_y[i]/tol)^2
+        @views tol = abs_tol[i]+max(abs(Ray[i]),abs(y[i]))*rel_tol[i]
+        @views error += (delta_y[i]/tol)^2
     end
     error=sqrt(error/raylength)
 
