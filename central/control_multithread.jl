@@ -1,6 +1,6 @@
 """
 v0.3.3
-October 9 2025
+October 30 2025
 Author: Levi Malmström
 """
 
@@ -21,7 +21,13 @@ using ImageView
 #Pkg.add("FileIO")
 using FileIO
 #Pkg.add("ProfileView")
-using ProfileView
+#using ProfileView
+#Pkg.add("ProfileCanvas")
+using ProfileCanvas
+#Pkg.add("StaticArrays")
+#using StaticArrays
+#Pkg.add("LoopVectorization")
+using LoopVectorization
 using Profile
 using Base.Threads
 
@@ -43,7 +49,7 @@ const cie_matrix=[
 [0.0624 0.0264 0.0490 0.0213 0.0613 0.0845 0.0385];
 [0.0374 0.0323 0.0382 0.0247 0.0322 0.0278 0.0725]]
 #Dormand-Prince Butcher tableau
-const DP_Butcher=[
+const DP_Butcher= [
 [0 0 0 0 0 0 0 0];
 [1/5 1/5 0 0 0 0 0 0];
 [3/10 3/40 9/40 0 0 0 0 0];
@@ -160,16 +166,18 @@ function ray_kernel(ray,starting_timestep,tolerance,colors,colors_freq,raylength
     dt=starting_timestep
     raytrace=true
     shared_slope=calc_ray_derivative(ray,raylength,colors_freq)
+    buffer=similar(shared_slope)
+    deriv_buffer=similar(shared_slope)
     rejected=false
     step_count=0
     
     while raytrace
-        ray,shared_slope,dt,rejected=RKDP_Step(ray,shared_slope,raylength,dt,colors_freq,
+        ray,shared_slope,dt,rejected,buffer=RKDP_Step_w_buffer!(ray,shared_slope,raylength,dt,colors_freq,
                                                      abs_tol, rel_tol,rejected,
-                                                     pad_max_dt2(ray[1:4], max_dt_scale))
+                                                     pad_max_dt2(ray[1:4], max_dt_scale),buffer)
         step_count+=1
         #my current termination condition
-        if step_count>=max_steps || minimum(ray[9:2:end])>=-log(tolerance) || sqrt(ray[2]^2 + ray[3]^2 +
+        @views if step_count>=max_steps || minimum(ray[9:2:end])>=-log(tolerance) || sqrt(ray[2]^2 + ray[3]^2 +
             ray[4]^2) > 0.7
             raytrace=false
         end
@@ -190,12 +198,12 @@ function iterate_on_pix_range(ray_bundle,img_bundle,tolerance::Real,colors,color
                                                      tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,
                                                      max_dt_scale,max_steps)
     end
-    println("Elapsed time (ns): ",time_ns()-start_time, "; Thread ID: ",threadid())
+    #println("Elapsed time (ns): ",time_ns()-start_time, "; Thread ID: ",threadid())
     return ray_bundle,img_bundle
 end
 
 
-function alltogethernow_RKDP(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
+function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
                         camera_point=[0.0,0.0,0.0],x_pix=40,max_steps=1e3,colors=[400,550,700],
                              returnrays=false,tolerance=1e-4::Real,max_dt_scale=1e-2::Real,fov_hor=85::Real,
                              fov_vert=60::Real)
