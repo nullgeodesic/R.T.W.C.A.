@@ -93,6 +93,31 @@ function find_bad_color(color_array)
     end
 end
 
-function test_full_code_speed()
-    return alltogethernow_RKDP(camera_pos=[0,0.0,0.0,-0.05],colors=colors,x_pix=50,max_dt_scale=1e-2)
+function plot_rays_spherical_minkowski(ray_matrix)
+    x_pix = size(ray_matrix,1)
+    y_pix = size(ray_matrix,2)
+
+    x_grid = zeros(x_pix,y_pix)
+    y_grid = zeros(x_pix,y_pix)
+    z_grid = zeros(x_pix,y_pix)
+
+    for i in 1:x_pix
+        for j in 1:y_pix
+            x_grid[i,j] = ray_matrix[i,j,2]*sin(ray_matrix[i,j,3])*cos(ray_matrix[i,j,4])
+            y_grid[i,j] = ray_matrix[i,j,2]*sin(ray_matrix[i,j,3])*sin(ray_matrix[i,j,4])
+            z_grid[i,j] = ray_matrix[i,j,2]*cos(ray_matrix[i,j,3])
+
+            # make sure glitched out points don't make the other ones hard to see
+            if sqrt(x_grid[i,j]^2 + y_grid[i,j]^2 + z_grid[i,j]^2) > 100
+                x_grid[i,j] = 0
+                y_grid[i,j] = 0
+                z_grid[i,j] = 0
+            end
+
+        end
+    end
+    xs=reshape(x_grid,x_pix*y_pix)
+    ys=reshape(y_grid,x_pix*y_pix)
+    zs=reshape(z_grid,x_pix*y_pix)
+    scatter(xs,ys,zs)
 end

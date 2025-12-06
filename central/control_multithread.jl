@@ -1,6 +1,6 @@
 """
-v0.3.3
-October 30 2025
+v0.3.4
+November 10 2025
 Author: Levi Malmström
 """
 
@@ -8,6 +8,10 @@ using LinearAlgebra
 using Pkg
 #Pkg.add("Plots")
 using Plots
+#Pkg.add("PlotlyBase")
+#Pkg.add("PlotlyKaleido")
+plotly()
+
 #Pkg.add("Interpolations")
 using Interpolations
 #Pkg.add("Integrals")
@@ -33,15 +37,17 @@ using Base.Threads
 
 #CONSTANTS
 #Planck Constant in J/Hz
-const h=6.62607015e-34
+const h = 6.62607015e-34
 #Reduced Planck Constant in J*s
-const hbar=h/(2*pi)
+const hbar = h/(2*pi)
 #Speed of light in m/s
-const c=299792458
+const c = 299792458
 #Boltzman Constant in J/K
-const k_B=1.380649e-23
+const k_B = 1.380649e-23
 #How many meters corespond to one unit of the map
-const map_scale=1
+const map_scale = 1
+#Protects from dividing by zero in certain situations
+const no_div_zero = 1e-24
 #Color match function fit values
 const cie_matrix=[
 [0.362 1.056 -0.065 0.821 0.286 1.217 0.681];
@@ -60,10 +66,10 @@ const DP_Butcher= [
 [0 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
 [0 5179/57600 0 7571/16695 393/640 -92097/339200 187/2100 1/40]]
 
-include("geometry.jl")
-include("source_model.jl")
+include("gen_geometry.jl")
 include("color_theory.jl")
 include("integrators.jl")
+include("Spherical_Minkowski_Sphere.source/source_main.jl")
 include("tests.jl")
 
 
@@ -90,11 +96,11 @@ Initialize the camera/rays from user input.
 - 'fov_vert=60': the target height of the image/field of view, in degrees.
 - 'colors=[400,550,700]': the wavelengths in nm that will be used to create the image.
 """
-function initialize_camera(position; direction=[0.0,0.0], beta=0.0::Real, pointing=[0.0,0.0,0.0],
+function initialize_camera(position::Vector; direction=[0.0,0.0], beta=0.0::Real, pointing=[0.0,0.0,0.0],
                            horizontal_pixels=1024::Integer, fov_hor=85::Real, fov_vert=60::Real, colors=[400,550,700])
     #convert to radians
-    fov_hor=pi*fov_hor/180
-    fov_vert=pi*fov_vert/180
+    fov_hor=π*fov_hor/180
+    fov_vert=π*fov_vert/180
     #calculate canvas size
     W=tan(fov_hor/2)
     H=tan(fov_vert/2)
@@ -104,7 +110,7 @@ function initialize_camera(position; direction=[0.0,0.0], beta=0.0::Real, pointi
     rho_hor=2*W/(horizontal_pixels+1)
     rho_vert=2*H/(vertical_pixels+1)
     
-    #initialize blank rays as state vectors (4 position values, 4 velocity values, 2 optical values for each color
+    #initialize blank rays as state vectors (4 position values, 4 velocity values, 2 optical values for each color)
     ray_state_length=8+2*length(colors)
     S=zeros(horizontal_pixels,vertical_pixels,ray_state_length)
     #now actually fill in proper values into those spots!
@@ -116,27 +122,27 @@ function initialize_camera(position; direction=[0.0,0.0], beta=0.0::Real, pointi
             end
             
             h=rho_vert*(j-0.5)-H
-            theta=atan(sqrt(w^2 + h^2))
+            θ=atan(sqrt(w^2 + h^2))
 
             #phi=sign(h)*acos(w/sqrt(w^2 + h^2))
             if w>0
-               phi=atan(h/w)
+                ϕ =atan(h/w)
             elseif w<0 && h>=0
-                phi=atan(h/w)+pi
+                ϕ=atan(h/w)+ π
             elseif w<0 && h<0
-                phi=atan(h/w)-pi
+                ϕ=atan(h/w)-π
             elseif w==0 && h>0
-                phi=pi/2
+                ϕ=π/2
             elseif w==0 && h<0
-                phi=-pi/2
+                ϕ=-π/2
             else
-                phi=0
+                ϕ=0
             end
       
             S[i,j,5]=1
-            S[i,j,6]=-sin(theta)*cos(phi)
-            S[i,j,7]=-sin(theta)*sin(phi)
-            S[i,j,8]=-cos(theta)
+            S[i,j,6]=-sin(θ)*cos(ϕ)
+            S[i,j,7]=-sin(θ)*sin(ϕ)
+            S[i,j,8]=-cos(θ)
             #geometrically, we have projected the pixels from the canvas at z=1 onto a sphere
             #but the points actually are velocity vectors, so we need to negate them,
             #since the rays are traveling into the camera, not out.
@@ -150,7 +156,7 @@ function initialize_camera(position; direction=[0.0,0.0], beta=0.0::Real, pointi
     #Matrix to rotate coordinate axes to align with FIDO frame
     R2=gen_final_rotation_matrix(direction)
     #Matrix to convert to global coordinates
-    e=calc_local_vierbein(position)
+    e=calc_inv_vierbein(position)
     for i = 1:horizontal_pixels
         for j = 1:vertical_pixels
             S[i,j,5:8]=e*R2*L*R*S[i,j,5:8]
@@ -172,13 +178,22 @@ function ray_kernel(ray,starting_timestep,tolerance,colors,colors_freq,raylength
     step_count=0
     
     while raytrace
-        ray,shared_slope,dt,rejected,buffer=RKDP_Step_w_buffer!(ray,shared_slope,raylength,dt,colors_freq,
-                                                     abs_tol, rel_tol,rejected,
-                                                     pad_max_dt2(ray[1:4], max_dt_scale),buffer)
+        ray,shared_slope,dt,rejected,buffer=RKDP_Step_w_buffer(ray,shared_slope,raylength,dt,colors_freq,
+                                                     abs_tol, rel_tol,rejected,max_dt_scale,buffer)
         step_count+=1
+
+        #catch NaN's
+        if find_NaN(ray)
+            println("NaN Warning, stopping ray ",threadid(), " ", ray[1:8])
+            raytrace=false
+        end
+        
         #my current termination condition
-        @views if step_count>=max_steps || minimum(ray[9:2:end])>=-log(tolerance) || sqrt(ray[2]^2 + ray[3]^2 +
-            ray[4]^2) > 0.7
+        @views if step_count >= max_steps || minimum(ray[9:2:end]) >= -log(tolerance) || ray[2] > 10
+            if step_count >= max_steps
+                println("Max Steps",ray[1:8])
+            end
+
             raytrace=false
         end
     end
@@ -191,14 +206,17 @@ end
 function iterate_on_pix_range(ray_bundle,img_bundle,tolerance::Real,colors,colors_freq,
                               raylength::Integer,abs_tol,rel_tol,max_dt_scale::Real,max_steps::Real,
                               start_time::UInt64)
-    #println("Thread: ",threadid(),". bundle size: ",size(ray_bundle,1),".")
     for i in 1:size(ray_bundle,1)
         ray_bundle[i,:],img_bundle[i]=ray_kernel(ray_bundle[i,:],
-                                                     -pad_max_dt2(ray_bundle[i,1:4],max_dt_scale),
+                                                     -pad_max_dt(ray_bundle[i,1:8],max_dt_scale),
                                                      tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,
                                                      max_dt_scale,max_steps)
     end
     #println("Elapsed time (ns): ",time_ns()-start_time, "; Thread ID: ",threadid())
+    #if find_NaN(img_bundle)
+        #println(find_NaN(ray_bundle)," ",threadid()," ",ray_bundle[1,1:8])
+    #end
+    
     return ray_bundle,img_bundle
 end
 
@@ -206,7 +224,13 @@ end
 function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
                         camera_point=[0.0,0.0,0.0],x_pix=40,max_steps=1e3,colors=[400,550,700],
                              returnrays=false,tolerance=1e-4::Real,max_dt_scale=1e-2::Real,fov_hor=85::Real,
-                             fov_vert=60::Real)
+                   fov_vert=60::Real)
+    #check that camera is in a valid location
+    if is_singularity(camera_pos)
+        println("Invalid Camera; returning blank image")
+        return zeros(RGB{N0f16},2)
+    end
+
     #initialize rays
     ray_matrix=initialize_camera(camera_pos,direction=camera_dir,beta=speed,pointing=camera_point,
                                  horizontal_pixels=x_pix,colors=colors,fov_hor=fov_hor, fov_vert=fov_vert)
@@ -256,6 +280,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
 
     ray_matrix=reshape(long_ray_matrix,(x_pix,y_pix,raylength))
     xyY_img=reshape(long_xyY_img,(x_pix,y_pix))
+    #println(find_NaN(xyY_img))
     
     #check that any rays even hit anything, and return a blank image if they didn't
     max_pixel_val=maxfinite(xyY_img)
