@@ -1,9 +1,13 @@
 """
-v0.3.4
-November 10 2025
+v0.3.5
+December 12 2025
 Author: Levi Malmström
 """
 
+"""
+Generates a rotation matrix to rotate the direction the camera is pointing
+relative to it's direction of motion.
+"""
 function gen_intrinsic_rotation_matrix(pointing=[0,0,0])
     #generate rotation matrix
     #'roll'
@@ -37,6 +41,11 @@ function gen_intrinsic_rotation_matrix(pointing=[0,0,0])
     return R
 end
 
+
+"""
+Generates a rotation matrix to rotate the direction the camera is moving
+relative to the local coordinate tetrad.
+"""
 function gen_final_rotation_matrix(direction=[0,0])
     #turn angle coords into cartesion direction
     d=[sin(direction[1])*cos(direction[2]),
@@ -76,6 +85,9 @@ function gen_final_rotation_matrix(direction=[0,0])
 end
 
 
+"""
+Lorentz boost on z axis by velocity β.
+"""
 function lorentz_boost_z(beta)
     Lambda=zeros(4,4)
     gamma=1/sqrt(1-beta^2)

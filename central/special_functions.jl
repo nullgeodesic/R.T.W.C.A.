@@ -1,0 +1,17 @@
+"""
+v0.3.5
+December 9 2025
+Author: Levi Malmström
+"""
+
+
+"""
+Heaviside step function.
+"""
+function Heaviside(x)
+    if x >= 0
+        return 1
+    else
+        return 0
+    end
+end

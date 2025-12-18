@@ -1,6 +1,6 @@
 """
-v0.3.4
-November 12 2025
+v0.3.5
+December 12 2025
 Author: Levi Malmström
 """
 
@@ -55,12 +55,15 @@ function pad_max_dt(pos_vel,max_dt_scale)
 end
 
 
-"""
-function pad_max_dt(pos_vel,max_dt_scale)
-    return max_dt_scale
-end
-"""
-
 function get_source_velocity(position)
     return [1,0,0,0]
+end
+
+function calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale, max_steps,step_count)
+    @views if step_count >= max_steps || minimum(ray[9:2:end]) >=
+        -log(abs_tol[10]) || ray[2] > 100
+        return true
+    else
+        return false
+    end
 end

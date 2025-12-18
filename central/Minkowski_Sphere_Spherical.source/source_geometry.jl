@@ -1,6 +1,6 @@
 """
-v0.3.4
-November 11 2025
+v0.3.5
+December 12 2025
 Author: Levi Malmström
 """
 
@@ -61,21 +61,21 @@ function calc_christoffel_udd(position,index::Tuple)
     end           
 end
 
-function near_singularity(ray,stepsize::Real)
+function near_singularity(ray,stepsize::Real,abs_tol)
     dθ = stepsize*ray[7]
     θ_new = ray[3] + dθ
     dr = stepsize*ray[6]
     new_r = ray[2]+dr
 
     #check if near θ = 0
-    if abs(θ_new) <= 1e-3
+    if abs(θ_new) <= abs_tol[3]
         return true, 2*abs(ray[3])/(abs(ray[7]*9) + no_div_zero)
     #check if near θ = π
-    elseif abs(θ_new - π) <= 1e-3
-        return true, 2*abs(ray[3])/(abs(ray[7]*9) + no_div_zero)
-    #check if near r=0
-    elseif abs(new_r) <= abs(dr)
-        return true, 2*new_r/(ray[6]*9 + no_div_zero*sign(ray[6]))
+    elseif abs(θ_new - π) <= abs_tol[3]
+        return true, 2*abs((ray[3] - pi)/(abs(ray[7]*9) + no_div_zero))
+    #check if near r = 0
+    elseif abs(new_r) <= abs_tol[2]
+        return true, 2*(abs_tol[2])/(abs(ray[6]*9) + no_div_zero)
     else
         return false, stepsize
     end
@@ -83,9 +83,11 @@ end
 
 
 function keepinbounds!(ray::Vector)
-    if ray[2] < 0
-        ray[2] = abs(ray[2])
-        ray[3] += π
+    if ray[2] <= 0
+        ray[2] = -ray[2] + no_div_zero
+        ray[6] = -ray[6]
+        ray[3] -= π
+        ray[7] = -ray[7]
     end
 
     if ray[3] < 0

@@ -1,6 +1,6 @@
 """
-v0.3.4
-November 12 2025
+v0.3.5
+December 5 2025
 Author: Levi Malmström
 """
 
@@ -23,7 +23,7 @@ function calc_spectral_emission_coeficient(position_velocity,frequency)
 end
 
 function calc_spectral_absorbtion_coeficient(position_velocity,frequency)
-    #units are m^-1 with default scale
+    #units are 1/M
     @views if is_fire(position_velocity[1:4])
         a_nu=1/map_scale
         return a_nu
@@ -33,8 +33,8 @@ function calc_spectral_absorbtion_coeficient(position_velocity,frequency)
 end
 
 function is_fire(position)
-    #sphere of radius 1 centered on origin
-    if position[2] <=1
+    #wedge shaped disk from 6 <= r <= 12, 15π/32 <= θ <= 17π/32
+    if 6 <= position[2] <= 12 && 15π/32 <= position[3] <= 17π/32
         return true
     else
         return false
@@ -54,17 +54,24 @@ function pad_max_dt(pos_vel,max_dt_scale)
     return max_step_size
 end
 
-function euler_dt(pos_vel,max_dt_scale)
-    return max_dt_scale/(abs(pos_vel[7])+abs(pos_vel[8]))
-end
-
-
-"""
-function pad_max_dt(pos_vel,max_dt_scale)
-    return max_dt_scale
-end
-"""
-
 function get_source_velocity(position)
-    return [1,0,0,0]
+    #M=1
+    #Ω = sqrt(M/r^3)
+    #ut = (1 - 3M/r)^(-1/2)
+    #uα = ut*[1,0,0,Ω]
+    if is_fire(position)
+        return [inv(sqrt(1 - 3*M/position[2])),0,0,inv(sqrt(1 - 3*M/position[2]))*sqrt(M/position[2]^3)]
+    else
+        return [inv(sqrt(1 - 2*M/position[2])),0,0,0]
+    end
+
+end
+
+function calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale, max_steps,step_count)
+    @views if step_count >= max_steps || minimum(ray[9:2:end]) >=
+        -log(abs_tol[10]) || ray[2] > 100 || ray[2] <= (10*rel_tol[2] + 2)*r_s
+        return true
+    else
+        return false
+    end
 end

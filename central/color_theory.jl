@@ -4,13 +4,19 @@ October 3 2025
 Author: Levi Malmström
 """
 
+
+"""
+Selector function for the fits of the color matching functions.
+"""
 function Selector_funct(x,y,z)
-    #Selector function for the fits of the color matching functions
     return y*(1-Heaviside(x))+z*Heaviside(x)
 end
 
+
+"""
+A fit for the CIE X color matching function.
+"""
 function cie_x(wavelength)
-    #A fit for the CIE X color matching function
     x=0
     for i in 1:3
         x=x+cie_matrix[1,i]*exp((-1/2)*((wavelength-cie_matrix[2,i])*Selector_funct(
@@ -19,8 +25,11 @@ function cie_x(wavelength)
     return x
 end
 
+
+"""
+A fit for the CIE Y color matching function.
+"""
 function cie_y(wavelength)
-    #A fit for the CIE Y color matching function
     y=0
     for i in 1:2
         y=y+cie_matrix[1,i+3]*exp((-1/2)*((wavelength-cie_matrix[2,i+3])*Selector_funct(
@@ -29,8 +38,11 @@ function cie_y(wavelength)
     return y
 end
 
+
+"""
+A fit for the CIE Z color matching function.
+"""
 function cie_z(wavelength)
-    #A fit for the CIE Z color matching function
     z=0
     for i in 1:2
         z=z+cie_matrix[1,i+5]*exp((-1/2)*((wavelength-cie_matrix[2,i+5])*Selector_funct(
@@ -39,8 +51,11 @@ function cie_z(wavelength)
     return z
 end
 
+
+"""
+Calculates the I_λs from a ray.
+"""
 function ray_to_I_λ(ray,colors,colors_freq)
-    #Calculates the I_λs from a ray
     n_colors=length(colors)
     I_λs=zeros(n_colors)
     for i in 1:n_colors
@@ -51,8 +66,11 @@ function ray_to_I_λ(ray,colors,colors_freq)
     return I_λs
 end
 
+
+"""
+Calculates the xyY colorspace coordinates of a ray from it's spectrum.
+"""
 function calc_xyY(ray,colors,colors_freq)
-    #Calculates the color of a ray
     I_λs=ray_to_I_λ(ray,colors,colors_freq)
     
     I_interpolation=linear_interpolation(colors,I_λs)
@@ -67,6 +85,5 @@ function calc_xyY(ray,colors,colors_freq)
     else
         CIExyY=xyY{Float64}(1,1,0)
     end
-    
     return CIExyY
 end

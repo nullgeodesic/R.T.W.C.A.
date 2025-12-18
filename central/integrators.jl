@@ -1,7 +1,12 @@
 """
-v0.3.4
-November 11 2025
+v0.3.5
+December 6 2025
 Author: Levi Malmström
+"""
+
+
+"""
+Calculates the derivative of the ray with respect to affine parameter.
 """
 function calc_ray_derivative(Ray,raylength::Integer,colors_freq)
     #calculate derivative at a point
@@ -26,6 +31,9 @@ function calc_ray_derivative(Ray,raylength::Integer,colors_freq)
 
     #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
     @views freq_shift=-transpose(get_source_velocity(Ray[1:4]))*calc_lower_metric(Ray[1:4])*Ray[5:8]
+    if !isfinite(freq_shift) || freq_shift <= 0
+        println("Bad freq shift; ", freq_shift, " ", threadid(), " ",Ray[1:8])
+    end
 
     for i in 9:raylength
         if isodd(i)
@@ -42,24 +50,20 @@ function calc_ray_derivative(Ray,raylength::Integer,colors_freq)
 end
 
 
-function Euler_Step!(Ray::Vector,raylength::Integer,stepsize::Real,colors_freq::Vector)
-    Ray += stepsize*calc_ray_derivative(Ray,raylength,colors_freq)
-    return nothing
-end
-
-
+"""
+Integrate the ray by one time step using the Dormand-Prince-Runge-Kutta Method.
+"""
 function RKDP_Step_w_buffer(Ray::Vector,slope_last::Vector,raylength::Integer,stepsize::Real,colors_freq::Vector,
                              abs_tol,rel_tol,prev_rejected::Bool, max_dt_scale::Real,buffer::Vector)
-    #Runge-Kutta Method -- Dormand-Prince method
     k1 = slope_last
     next_slope=similar(k1)
     @views max_dt = pad_max_dt(Ray[1:8], max_dt_scale)
 
     #check for and deal with singularities
-    @views warn_singularity, temp_stepsize = near_singularity(Ray[1:8],stepsize)
+    @views warn_singularity, temp_stepsize = near_singularity(Ray[1:8],stepsize,abs_tol)
     if warn_singularity
         #switch to an euler method scheme that should hopefully dodge the singularity itself
-        #println("Grazed singularity!",Ray[1:8])
+        #println("Grazed singularity! ", threadid(), " ", Ray[1:8])
 
         Ray -= temp_stepsize*k1
 
@@ -70,13 +74,22 @@ function RKDP_Step_w_buffer(Ray::Vector,slope_last::Vector,raylength::Integer,st
         end
         
         for i in 1:8
-            Ray -= temp_stepsize*calc_ray_derivative(Ray,raylength,colors_freq)
-            keepinbounds!(Ray)
+            if !calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
+                Ray -= temp_stepsize*calc_ray_derivative(Ray,raylength,colors_freq)
+                keepinbounds!(Ray)
+            end
+            
             @views if is_singularity(Ray[1:4])
                 println("Singularity Warning! ", Ray[1:8], " ",threadid())
             elseif find_NaN(Ray[1:8])
                 println("NaN Warning! ", Ray[1:8], " ",threadid())
             end
+        end
+
+        #check for horizons and stuff
+        if calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
+            #return terminal ray
+            return Ray,slope_last,stepsize,false,buffer
         end
         #then hand the ray back to the normal Runge-Kutta integrator
         slope_last = calc_ray_derivative(Ray,raylength,colors_freq)

@@ -1,6 +1,6 @@
 """
-v0.3.4
-November 10 2025
+v0.3.5
+December 12 2025
 Author: Levi Malmström
 """
 
@@ -29,6 +29,14 @@ function calc_christoffel_udd(position,index)
     return Christoffel
 end
 
-function near_singularity(ray::Vector,stepsize::Real)
+function near_singularity(ray,stepsize::Real,abs_tol)
+    return false, stepsize
+end
+
+function is_singularity(position)
     return false
+end
+
+function keepinbounds!(ray::Vector)
+    return nothing
 end
