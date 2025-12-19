@@ -1,6 +1,6 @@
 """
-v0.3.5
-December 5 2025
+v0.3.6
+December 18 2025
 Author: Levi Malmström
 """
 
@@ -14,15 +14,30 @@ function ray_kernel(ray,starting_timestep,tolerance,colors,colors_freq,raylength
     #integrate ray
     dt=starting_timestep
     raytrace=true
+
+    #various 'buffers' to drastically reduce memory allocations
     shared_slope=calc_ray_derivative(ray,raylength,colors_freq)
-    buffer=similar(shared_slope)
-    deriv_buffer=similar(shared_slope)
+    last_slope = copy(shared_slope)
+    next_slope = copy(shared_slope)
+    buffer = similar(shared_slope)
+    y = similar(shared_slope)
+    source_vel = [0.0,0.0,0.0,0.0]
+    g = Matrix{Float64}(I,4,4)
+    k2 = similar(shared_slope)
+    k3 = similar(shared_slope)
+    k4 = similar(shared_slope)
+    k5 = similar(shared_slope)
+    k6 = similar(shared_slope)
+    k7 = similar(shared_slope)
+    
+    
     rejected=false
     step_count=0
     
     while raytrace
-        ray,shared_slope,dt,rejected,buffer=RKDP_Step_w_buffer(ray,shared_slope,raylength,dt,colors_freq,
-                                                     abs_tol, rel_tol,rejected,max_dt_scale,buffer)
+        ray,dt,rejected=RKDP_Step_w_buffer!(ray,y,last_slope,next_slope,raylength,dt,colors_freq,
+                                                         abs_tol, rel_tol,rejected,max_dt_scale,buffer,
+                                                         k2,k3,k4,k5,k6,k7,source_vel,g)
         step_count+=1
 
         #catch NaN's
@@ -34,9 +49,11 @@ function ray_kernel(ray,starting_timestep,tolerance,colors,colors_freq,raylength
         #my current termination condition
         if calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,
                           max_dt_scale, max_steps,step_count)
+            """
             if step_count >= max_steps
                 println("Max Steps",ray[1:8])
             end
+            """
             raytrace=false
         end
     end

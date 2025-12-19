@@ -1,6 +1,6 @@
 """
-v0.3.5
-December 12 2025
+v0.3.6
+December 18 2025
 Author: Levi Malmström
 """
 
@@ -97,6 +97,21 @@ end
 """
 
 
+"""
+Velocity of the material at a position (mutating).
+"""
+function get_source_velocity!(position,source_vel_buffer::Vector)
+    source_vel_buffer[1] = 1.0
+    source_vel_buffer[2] = 0.0
+    source_vel_buffer[3] = 0.0
+    source_vel_buffer[4] = 0.0
+    return nothing
+end
+
+
+"""
+Velocity of the material at a position (non-mutating).
+"""
 function get_source_velocity(position)
     return [1,0,0,0]
 end

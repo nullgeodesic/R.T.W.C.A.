@@ -1,6 +1,6 @@
 """
-v0.3.5
-December 5 2025
+v0.3.56
+December 18 2025
 Author: Levi Malmström
 """
 
@@ -11,7 +11,19 @@ const r_s = 2*M
 
 
 """
-Calculates the metric-matrix g_ij at a position.
+Calculates the metric-matrix g_ij at a position (mutating).
+"""
+function calc_lower_metric!(position,g)
+    g[1,1] = -(1 - r_s/position[2])
+    g[2,2] = inv(1 - r_s/position[2])
+    g[3,3]=position[2]^2
+    g[4,4]=(position[2]*sin(position[3]))^2
+    return nothing
+end
+
+
+"""
+Calculates the metric-matrix g_ij at a position (non-mutating).
 """
 function calc_lower_metric(position)
     g=Matrix{Float64}(I,4,4)
@@ -44,7 +56,7 @@ function calc_christoffel_udd(position,index::Tuple)
         if (index[2] == 1 && index[3] == 2) || (index[2] == 2 && index[3] == 1)
             return r_s/(2*position[2]*(position[2] - r_s))
         else
-            return 0
+            return 0.0
         end
     elseif index[1]==2
         if index[2]==1 && index[3]==1
@@ -56,7 +68,7 @@ function calc_christoffel_udd(position,index::Tuple)
         elseif index[2]==4 && index[3]==4
             return -(position[2]-r_s)*sin(position[3])^2
         else
-            return 0
+            return 0.0
         end
     elseif index[1]==3
         if (index[2]==2 && index[3]==3) || (index[2]==3 && index[3]==2)
@@ -64,7 +76,7 @@ function calc_christoffel_udd(position,index::Tuple)
         elseif index[2]==4 && index[3]==4
             return -sin(position[3])*cos(position[3])
         else
-            return 0
+            return 0.0
         end
     elseif index[1]==4
         if (index[2]==2 && index[3]==4) || (index[2]==4 && index[3]==2)
@@ -72,10 +84,10 @@ function calc_christoffel_udd(position,index::Tuple)
         elseif (index[2]==3 && index[3]==4) || (index[2]==4 && index[3]==3)
             return cot(position[3])
         else
-            return 0
+            return 0.0
         end
     else
-        return 0
+        return 0.0
     end           
 end
 

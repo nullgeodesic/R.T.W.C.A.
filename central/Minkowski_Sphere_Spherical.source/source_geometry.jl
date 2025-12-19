@@ -1,11 +1,25 @@
 """
-v0.3.5
-December 12 2025
+v0.3.6
+December 18 2025
 Author: Levi Malmström
 """
 
 #Spherical Minkowski Space: (t,r,θ,ϕ);(γ,v,ω,ψ)
 
+"""
+Calculates the metric-matrix g_ij at a position (mutating).
+"""
+function calc_lower_metric!(position,g)
+    g[1,1]=-1
+    g[3,3]=position[2]^2
+    g[4,4]=(position[2]*sin(position[3]))^2
+    return nothing
+end
+
+
+"""
+Calculates the metric-matrix g_ij at a position (non-mutating).
+"""
 function calc_lower_metric(position)
     g=Matrix{Float64}(I,4,4)
     g[1,1]=-1

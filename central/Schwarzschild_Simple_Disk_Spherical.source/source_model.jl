@@ -1,6 +1,6 @@
 """
-v0.3.5
-December 5 2025
+v0.3.6
+December 18 2025
 Author: Levi Malmström
 """
 
@@ -78,7 +78,34 @@ end
 
 
 """
-Velocity of the material at a position.
+Velocity of the material at a position (mutating).
+"""
+function get_source_velocity!(position,source_vel_buffer::Vector)
+    #M=1
+    #Ω = sqrt(M/r^3)
+    #ut = (1 - 3M/r)^(-1/2)
+    #uα = ut*[1,0,0,Ω]
+    if is_fire(position)
+        #circular orbit
+        source_vel_buffer[1] = inv(sqrt(1 - 3*M/position[2]))
+        source_vel_buffer[2] = 0.0
+        source_vel_buffer[3] = 0.0
+        source_vel_buffer[4] = inv(sqrt(1 - 3*M/position[2]))*sqrt(M/position[2]^3)
+        return nothing
+    else
+        #FIDO
+        source_vel_buffer[1] = inv(sqrt(1 - 2*M/position[2]))
+        source_vel_buffer[2] = 0.0
+        source_vel_buffer[3] = 0.0
+        source_vel_buffer[4] = 0.0
+        return nothing
+    end
+
+end
+
+
+"""
+Velocity of the material at a position (non-mutating).
 """
 function get_source_velocity(position)
     #M=1

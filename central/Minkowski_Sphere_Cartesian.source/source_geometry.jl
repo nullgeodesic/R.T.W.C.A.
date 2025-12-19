@@ -5,6 +5,19 @@ Author: Levi Malmström
 """
 
 
+"""
+Calculates the metric-matrix g_ij at a position (mutating).
+"""
+function calc_lower_metric!(position,g)
+    #In this build I'm going with cartesian minkowski space
+    g[1,1]=-1
+    return g
+end
+
+
+"""
+Calculates the metric-matrix g_ij at a position (non-mutating).
+"""
 function calc_lower_metric(position)
     #In this build I'm going with cartesian minkowski space
     g=Matrix{Float64}(I,4,4)
