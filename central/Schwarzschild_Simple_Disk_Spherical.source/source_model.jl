@@ -1,9 +1,8 @@
 """
-v0.3.6
-December 18 2025
+v0.3.7
+December 19 2025
 Author: Levi Malmström
 """
-
 
 """
 Planck function.
@@ -25,10 +24,10 @@ end
 """
 Calculates the spectral emission coeficient for a BB radiator.
 """
-function calc_spectral_emission_coeficient(position_velocity,frequency)
+function calc_spectral_emission_coeficient(pos_vel,frequency)
     #j_nu = a_nu*B_nu for thermal emission
     #units are m^-1 with default scale
-    @views j_nu=calc_spectral_absorbtion_coeficient(position_velocity,frequency)*calc_planck(get_temp(position_velocity[1:4]),frequency)
+    @views j_nu=calc_spectral_absorbtion_coeficient(pos_vel,frequency)*calc_planck(get_temp(pos_vel),frequency)
     return j_nu
 end
 
@@ -36,9 +35,9 @@ end
 """
 Calculates the spectral absorbption coeficient.
 """
-function calc_spectral_absorbtion_coeficient(position_velocity,frequency)
+function calc_spectral_absorbtion_coeficient(pos_vel,frequency)
     #units are 1/M
-    @views if is_fire(position_velocity[1:4])
+    @views if is_fire(pos_vel)
         a_nu=1/map_scale
         return a_nu
     else
@@ -126,7 +125,7 @@ Whether to stop integrating the ray.
 """
 function calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale, max_steps,step_count)
     @views if step_count >= max_steps || minimum(ray[9:2:end]) >=
-        -log(abs_tol[10]) || ray[2] > 100 || ray[2] <= (10*rel_tol[2] + 2)*r_s
+        -log(abs_tol[10]) || ray[2] > 100 || ray[2] <= (10*rel_tol[2] + 2)*r_s || ray[4] > 8π
         return true
     else
         return false

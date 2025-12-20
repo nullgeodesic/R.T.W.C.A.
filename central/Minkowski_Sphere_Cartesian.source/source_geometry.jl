@@ -1,6 +1,6 @@
 """
-v0.3.5
-December 12 2025
+v0.3.7
+December 19 2025
 Author: Levi Malmström
 """
 
@@ -26,30 +26,44 @@ function calc_lower_metric(position)
 end
 
 
-function calc_vierbein(position)
-    #In this build I'm going with cartesian minkowski space
-    return Matrix{Float64}(I,4,4)
-end
-
+"""
+Calculates the inverse vierbein at a position.
+"""
 function calc_inv_vierbein(position)
     #In this build I'm going with cartesian minkowski space
     return Matrix{Float64}(I,4,4)
 end
 
+
+"""
+Calculates the Christoffel symbols of the second kind at a position.
+"""
 function calc_christoffel_udd(position,index)
     #In this build I'm going with cartesian minkowski space
     Christoffel=0
     return Christoffel
 end
 
+
+"""
+Determines if the ray is near a coordinate singularity.
+"""
 function near_singularity(ray,stepsize::Real,abs_tol)
     return false, stepsize
 end
 
-function is_singularity(position)
-    return false
-end
 
+"""
+Keeps the ray in the world bounds.
+"""
 function keepinbounds!(ray::Vector)
     return nothing
+end
+
+
+"""
+If the ray is on a coordinate singularity.
+"""
+function is_singularity(position)
+    return false
 end

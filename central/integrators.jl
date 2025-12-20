@@ -1,6 +1,6 @@
 """
-v0.3.6
-December 18 2025
+v0.3.7
+December 19 2025
 Author: Levi Malmström
 """
 
@@ -19,7 +19,7 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
         a=0
         for j in 5:8
             for k in 5:8
-                @views a -= calc_christoffel_udd(Ray[1:4],(i-4,j-4,k-4))*Ray[j]*Ray[k]
+                a -= calc_christoffel_udd(Ray,(i-4,j-4,k-4))*Ray[j]*Ray[k]
             end
         end
         if abs(a) > 1e9
@@ -30,7 +30,7 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
 
     #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
     get_source_velocity!(view(Ray,1:4),source_vel)
-    @views calc_lower_metric!(Ray[1:4],g)
+    calc_lower_metric!(view(Ray,1:4),g)
     #using my own four loop instead of Julia's stock matrix multiplication
     #@views freq_shift=-transpose(source_vel)*g*Ray[5:8]
     freq_shift = 0
@@ -50,10 +50,11 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
         if isodd(i)
             nu=colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and the camera
-            @views slope[i]=-calc_spectral_emission_coeficient(Ray[1:8],nu)*exp(-Ray[i+1])/nu^3
+            @views slope[i] = -calc_spectral_emission_coeficient(Ray[1:8],nu)*exp(-Ray[i+1])/nu^3
         else
             nu=-colors_freq[ceil(Int,(i-8)/2)]*freq_shift
-            #derivative of the optical depth which the ray "will" (hence the - sign) pass through in the "future" (+lambda) to get to the camera
+            #derivative of the optical depth which the ray "will" (hence the - sign) pass through in the "future"
+            #(+lambda) to get to the camera
             @views slope[i]=-calc_spectral_absorbtion_coeficient(Ray[1:8],nu)*freq_shift
         end
     end

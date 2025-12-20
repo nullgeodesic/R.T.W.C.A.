@@ -1,6 +1,6 @@
 """
-v0.3.56
-December 18 2025
+v0.3.7
+December 19 2025
 Author: Levi Malmström
 """
 
@@ -13,7 +13,7 @@ const r_s = 2*M
 """
 Calculates the metric-matrix g_ij at a position (mutating).
 """
-function calc_lower_metric!(position,g)
+function calc_lower_metric!(position,g::Matrix)
     g[1,1] = -(1 - r_s/position[2])
     g[2,2] = inv(1 - r_s/position[2])
     g[3,3]=position[2]^2
@@ -51,38 +51,38 @@ end
 """
 Calculates the Christoffel symbols of the second kind at a position.
 """
-function calc_christoffel_udd(position,index::Tuple)
+function calc_christoffel_udd(ray,index::Tuple)
     if index[1]==1
         if (index[2] == 1 && index[3] == 2) || (index[2] == 2 && index[3] == 1)
-            return r_s/(2*position[2]*(position[2] - r_s))
+            return r_s/(2*ray[2]*(ray[2] - r_s))
         else
             return 0.0
         end
     elseif index[1]==2
         if index[2]==1 && index[3]==1
-            return r_s*(position[2] - r_s)/(2*position[2]^3)
+            return r_s*(ray[2] - r_s)/(2*ray[2]^3)
         elseif index[2]==2 && index[3]==2
-            return -r_s/(2*position[2]*(position[2] - r_s))
+            return -r_s/(2*ray[2]*(ray[2] - r_s))
         elseif index[2]==3 && index[3]==3
-            return -(position[2]-r_s)
+            return -(ray[2]-r_s)
         elseif index[2]==4 && index[3]==4
-            return -(position[2]-r_s)*sin(position[3])^2
+            return -(ray[2]-r_s)*sin(ray[3])^2
         else
             return 0.0
         end
     elseif index[1]==3
         if (index[2]==2 && index[3]==3) || (index[2]==3 && index[3]==2)
-            return inv(position[2])
+            return inv(ray[2])
         elseif index[2]==4 && index[3]==4
-            return -sin(position[3])*cos(position[3])
+            return -sin(ray[3])*cos(ray[3])
         else
             return 0.0
         end
     elseif index[1]==4
         if (index[2]==2 && index[3]==4) || (index[2]==4 && index[3]==2)
-            return inv(position[2])
+            return inv(ray[2])
         elseif (index[2]==3 && index[3]==4) || (index[2]==4 && index[3]==3)
-            return cot(position[3])
+            return cot(ray[3])
         else
             return 0.0
         end
@@ -145,8 +145,9 @@ function keepinbounds!(ray::Vector)
         ray[4] += π
         ray[7] = -ray[7]
     end
-    
-    ray[4] = mod(ray[4],2π)
+
+    #uncomment the next line to restrict ϕ to [0,2π]
+    #ray[4] = mod(ray[4],2π)
     
     return nothing
 end

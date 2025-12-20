@@ -1,6 +1,6 @@
 """
-v0.3.6
-December 18 2025
+v0.3.7
+December 19 2025
 Author: Levi Malmström
 """
 
@@ -9,7 +9,7 @@ Author: Levi Malmström
 """
 Calculates the metric-matrix g_ij at a position (mutating).
 """
-function calc_lower_metric!(position,g)
+function calc_lower_metric!(position,g::Matrix)
     g[1,1]=-1
     g[3,3]=position[2]^2
     g[4,4]=(position[2]*sin(position[3]))^2
@@ -29,13 +29,9 @@ function calc_lower_metric(position)
 end
 
 
-function calc_vierbein(position)
-    vierbein = Matrix{Float64}(I,4,4)
-    vierbein[3,3] = position[2]
-    vierbein[4,4] = position[2]*sin(position[3])
-    return vierbein
-end
-
+"""
+Calculates the inverse vierbein at a position.
+"""
 function calc_inv_vierbein(position)
     inv_vierbein = Matrix{Float64}(I,4,4)
     inv_vierbein[3,3] = inv(position[2] + no_div_zero)
@@ -43,6 +39,10 @@ function calc_inv_vierbein(position)
     return inv_vierbein
 end
 
+
+"""
+Calculates the Christoffel symbols of the second kind at a position.
+"""
 function calc_christoffel_udd(position,index::Tuple)
     if index[1]==1
         return 0
@@ -75,6 +75,10 @@ function calc_christoffel_udd(position,index::Tuple)
     end           
 end
 
+
+"""
+Determines if the ray is near a coordinate singularity.
+"""
 function near_singularity(ray,stepsize::Real,abs_tol)
     dθ = stepsize*ray[7]
     θ_new = ray[3] + dθ
@@ -96,6 +100,9 @@ function near_singularity(ray,stepsize::Real,abs_tol)
 end
 
 
+"""
+Keeps the ray in the world bounds.
+"""
 function keepinbounds!(ray::Vector)
     if ray[2] <= 0
         ray[2] = -ray[2] + no_div_zero
@@ -117,11 +124,16 @@ function keepinbounds!(ray::Vector)
         ray[7] = -ray[7]
     end
     
-    ray[4] = mod(ray[4],2π)
+    #uncomment the next line to restrict ϕ to [0,2π]
+    #ray[4] = mod(ray[4],2π)
     
     return nothing
 end
 
+
+"""
+If the ray is on a coordinate singularity.
+"""
 function is_singularity(position)
     if abs(position[2]) <= 1e-323
         return true

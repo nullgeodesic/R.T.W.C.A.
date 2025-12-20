@@ -1,20 +1,30 @@
 """
-v0.3.6
-December 18 2025
+v0.3.7
+December 19 2025
 Author: Levi Malmström
 """
 
+"""
+Planck function.
+"""
 function calc_planck(T,nu)
     B_nu=2*h*nu^3/(c^2*(exp(h*nu/(k_B*T))-1))
     return B_nu
 end
 
 
+"""
+Gives the temperature at a position in Kelvin.
+"""
 function get_temp(position)
     #gives the temperature in Kelvin
     return 5778
 end
 
+
+"""
+Calculates the spectral emission coeficient for a BB radiator.
+"""
 function calc_spectral_emission_coeficient(position_velocity,frequency)
     #j_nu = a_nu*B_nu for thermal emission
     #units are m^-1 with default scale
@@ -22,6 +32,10 @@ function calc_spectral_emission_coeficient(position_velocity,frequency)
     return j_nu
 end
 
+
+"""
+Calculates the spectral absorbption coeficient.
+"""
 function calc_spectral_absorbtion_coeficient(position_velocity,frequency)
     #units are m^-1 with default scale
     #Set a_nu=760 for a real value from abstract of B.L. Wersborg, L.K. Fox, J.B. Howard 1974
@@ -34,6 +48,10 @@ function calc_spectral_absorbtion_coeficient(position_velocity,frequency)
     end
 end
 
+
+"""
+Determines if there is emmiting material at a location.
+"""
 function is_fire(position)
     #sphere of radius 1 centered on origin
     if sqrt(position[2]^2 + position[3]^2 + position[4]^2) <= 1
@@ -79,6 +97,9 @@ end
 """
 
 
+"""
+Keeps the integrator from going too fast.
+"""
 function pad_max_dt(position,max_dt_scale)
     return max_dt_scale*(1+abs(position[2])+abs(position[3])+abs(position[4]))
 end
@@ -117,6 +138,9 @@ function get_source_velocity(position)
 end
 
 
+"""
+Whether to stop integrating the ray.
+"""
 function calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale, max_steps,step_count)
     @views if step_count >= max_steps || minimum(ray[9:2:end]) >=
         -log(abs_tol[10]) || sqrt(ray[2]^2 + ray[3]^2 + ray[4]^2) > 100
