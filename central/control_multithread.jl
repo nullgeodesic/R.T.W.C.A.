@@ -144,7 +144,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     start_time =time_ns()
 
     #Main Loop
-    chunks = Iterators.partition(1:num_pix,cld(num_pix,nthreads()))
+    chunks = Iterators.partition(1:num_pix,cld(num_pix,100*nthreads()))
     tasks = []
     tasks = map(chunks) do chunk
         @spawn iterate_on_pix_range(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
