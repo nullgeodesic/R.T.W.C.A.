@@ -1,6 +1,6 @@
 """
-v0.3.6
-December 18 2025
+v0.4.0
+December 23 2025
 Author: Levi Malmström
 """
 
@@ -28,45 +28,23 @@ using FileIO
 #Pkg.add("ProfileCanvas")
 using ProfileCanvas
 using Profile
+#Pkg.add("Cthulhu")
+#using Cthulhu
 
-#CONSTANTS
-#Planck Constant in J/Hz
-const h = 6.62607015e-34
-#Reduced Planck Constant in J*s
-const hbar = h/(2*pi)
-#Speed of light in m/s
-const c = 299792458
-#Boltzman Constant in J/K
-const k_B = 1.380649e-23
-#How many meters corespond to one unit of the map
-const map_scale = 1
-#Protects from dividing by zero in certain situations
-const no_div_zero = 1e-24
-#Color match function fit values
-const cie_matrix=[
-[0.362 1.056 -0.065 0.821 0.286 1.217 0.681];
-[442.0 599.8 501.1 568.8 530.9 437.0 459.0];
-[0.0624 0.0264 0.0490 0.0213 0.0613 0.0845 0.0385];
-[0.0374 0.0323 0.0382 0.0247 0.0322 0.0278 0.0725]]
-#Dormand-Prince Butcher tableau
-const DP_Butcher= [
-[0 0 0 0 0 0 0 0];
-[1/5 1/5 0 0 0 0 0 0];
-[3/10 3/40 9/40 0 0 0 0 0];
-[4/5 44/45 -56/15 32/9 0 0 0 0];
-[8/9 19372/6561 -25360/2187 64448/6561 -212/729 0 0 0];
-[1 9017/3168 -355/33 46732/5247 49/176 -5103/18656 0 0];
-[1 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
-[0 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
-[0 5179/57600 0 7571/16695 393/640 -92097/339200 187/2100 1/40]]
 
 #load general modules
 include("gen_geometry.jl")
 include("color_theory.jl")
-include("integrators.jl")
-include("tests.jl")
 include("special_functions.jl")
-include("control_multithread.jl")
+include("tests.jl")
+
+#CPU integration setup
+include("LttM.jl")
+
+
+#GPU integration setup
+#include("5P.jl")
+
 
 """
 Convenience functions for setup.

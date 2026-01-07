@@ -1,22 +1,38 @@
 """
-v0.3.7
-December 19 2025
+v0.4.0
+December 24 2025
 Author: Levi Malmström
 """
 
+#CONSTANTS
+#emission scale factor (to scale the rays at the end)
+#2h/c^2, but scaled to ν measured in 1/nm instead of Hz
+const emission_scale = 2*h*c*1e27
+#h/k_B in nm/K, instead of the normal s/K, because ν is in units of nm^-1, not Hz
+const ν_factor = h*c*1e9/k_B
+
+
+
 """
-Planck function.
+Planck function (ν in nm^-1).
 """
-function calc_planck(T,nu)
-    B_nu=2*h*nu^3/(c^2*(exp(h*nu/(k_B*T))-1))
-    return B_nu
+function calc_planck(T,ν)
+    B_ν = emission_scale*ν^3/(exp(ν_factor*ν/T)-1)
+    return B_ν
 end
 
+"""
+Planck function (ν in Hz).
+"""
+function calc_planck_Hz(T,ν)
+    B_ν = 2*h*ν^3/(c^2*(exp(h*ν/(k_B*T))-1))
+    return B_ν
+end
 
 """
 Gives the temperature at a position in Kelvin.
 """
-function get_temp(position)
+function get_temp(ray)
     return 5778
 end
 
@@ -24,10 +40,10 @@ end
 """
 Calculates the spectral emission coeficient for a BB radiator.
 """
-function calc_spectral_emission_coeficient(pos_vel,frequency)
+function calc_spectral_emission_coeficient(ray,frequency)
     #j_nu = a_nu*B_nu for thermal emission
     #units are m^-1 with default scale
-    @views j_nu=calc_spectral_absorbtion_coeficient(pos_vel,frequency)*calc_planck(get_temp(pos_vel),frequency)
+    j_nu=calc_spectral_absorbtion_coeficient(ray,frequency)*calc_planck(get_temp(ray),frequency)
     return j_nu
 end
 
@@ -35,13 +51,13 @@ end
 """
 Calculates the spectral absorbption coeficient.
 """
-function calc_spectral_absorbtion_coeficient(pos_vel,frequency)
+function calc_spectral_absorbtion_coeficient(ray,frequency)
     #units are 1/M
-    @views if is_fire(pos_vel)
-        a_nu=1/map_scale
+    a_nu = 1/map_scale
+    if is_fire(ray)
         return a_nu
     else
-        return 0
+        return 0.0
     end
 end
 
@@ -62,15 +78,15 @@ end
 """
 Keeps the integrator from going too fast.
 """
-function pad_max_dt(pos_vel,max_dt_scale)
+function pad_max_dt(ray,max_dt_scale)
     #dλ = 1/(|dλ1|^-1 + |dλ2|^-1 + |dλ3|^-1)
     #dλ1 = ϵ/(|v| + δ)
     #dλ2 = ϵ min(θ,π-θ)/(|ω| + δ)
     #dλ3 = ϵ/(|ψ| + δ)
-    max_step_size = min(inv(abs(inv(max_dt_scale/(abs(pos_vel[6])+no_div_zero)) +
-        no_div_zero) + abs(inv(max_dt_scale*min(pos_vel[3],π-pos_vel[3])/(abs(pos_vel[7]) +
+    max_step_size = min(inv(abs(inv(max_dt_scale/(abs(ray[6])+no_div_zero)) +
+        no_div_zero) + abs(inv(max_dt_scale*min(ray[3],π-ray[3])/(abs(ray[7]) +
         no_div_zero) + no_div_zero)) +
-        abs(inv(max_dt_scale/(abs(pos_vel[8])+no_div_zero) + no_div_zero)) + no_div_zero),0.5)
+        abs(inv(max_dt_scale/(abs(ray[8])+no_div_zero) + no_div_zero)) + no_div_zero),0.5)
     max_step_size = max(max_step_size,1e-12)
     return max_step_size
 end
@@ -79,7 +95,7 @@ end
 """
 Velocity of the material at a position (mutating).
 """
-function get_source_velocity!(position,source_vel_buffer::Vector)
+function get_source_velocity!(position,source_vel_buffer)
     #M=1
     #Ω = sqrt(M/r^3)
     #ut = (1 - 3M/r)^(-1/2)

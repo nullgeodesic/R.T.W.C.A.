@@ -1,15 +1,32 @@
 """
-v0.3.7
-December 19 2025
+v0.4.0
+January 7 2025
 Author: Levi Malmström
 """
 
+#CONSTANTS
+#emission scale factor (to scale the rays at the end)
+#2h/c^2, but scaled to ν measured in 1/nm instead of Hz
+const emission_scale = 2*h*c*1e27
+#h/k_B in nm/K, instead of the normal s/K, because ν is in units of nm^-1, not Hz
+const ν_factor = h*c*1e9/k_B
+
+
+
 """
-Planck function.
+Planck function (ν in nm^-1).
 """
-function calc_planck(T,nu)
-    B_nu=2*h*nu^3/(c^2*(exp(h*nu/(k_B*T))-1))
-    return B_nu
+function calc_planck(T,ν)
+    B_ν = emission_scale*ν^3/(exp(ν_factor*ν/T)-1)
+    return B_ν
+end
+
+"""
+Planck function (ν in Hz).
+"""
+function calc_planck_Hz(T,ν)
+    B_ν = 2*h*ν^3/(c^2*(exp(h*ν/(k_B*T))-1))
+    return B_ν
 end
 
 

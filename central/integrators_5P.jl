@@ -1,6 +1,6 @@
 """
-v0.3.7
-December 19 2025
+v0.4.0
+December 30 2025
 Author: Levi Malmström
 """
 
@@ -8,7 +8,7 @@ Author: Levi Malmström
 """
 Calculates the derivative of the ray with respect to affine parameter (mutating).
 """
-function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel::Vector,g::Matrix)
+function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel,g)
     #calculate derivative at a point
     for i in 1:4
         #dx/dl=v
@@ -41,16 +41,17 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
         end
         freq_shift -= source_vel[j] * part_sum
     end
-    
-    if !isfinite(freq_shift) || freq_shift <= 0
-        println("Bad freq shift; ", freq_shift, " ", threadid(), " ",Ray[1:8])
-    end
 
+    j_v = calc_spectral_emission_coeficient(Ray,1.0)
+    @cuprintln(j_v, " ", threadIdx().x)
+    
     for i in 9:raylength
         if isodd(i)
             nu=colors_freq[ceil(Int,(i-8)/2)]*freq_shift
-            #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and the camera
-            @views slope[i] = -calc_spectral_emission_coeficient(Ray[1:8],nu)*exp(-Ray[i+1])/nu^3
+            #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and
+            #the camera
+            
+            slope[i] = -calc_spectral_emission_coeficient(Ray,nu)*exp(-Ray[i+1])/nu^3
         else
             nu=-colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the optical depth which the ray "will" (hence the - sign) pass through in the "future"
@@ -63,57 +64,12 @@ end
 
 
 """
-Calculates the derivative of the ray with respect to affine parameter (non-mutating).
-"""
-function calc_ray_derivative(Ray,raylength::Integer,colors_freq)
-    #calculate derivative at a point
-    slope = similar(Ray)
-    for i in 1:4
-        #dx/dl=v
-        slope[i]=Ray[i+4]
-    end
-    for i in 5:8
-        #geodesic equation
-        a=0
-        for j in 5:8
-            for k in 5:8
-                @views a -= calc_christoffel_udd(Ray[1:4],(i-4,j-4,k-4))*Ray[j]*Ray[k]
-            end
-        end
-        if abs(a) > 1e9
-            a=1e9
-        end
-        slope[i]=a
-    end
-
-    #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
-    @views freq_shift=-transpose(get_source_velocity(Ray[1:4]))*calc_lower_metric(Ray[1:4])*Ray[5:8]
-    if !isfinite(freq_shift) || freq_shift <= 0
-        println("Bad freq shift; ", freq_shift, " ", threadid(), " ",Ray[1:8])
-    end
-
-    for i in 9:raylength
-        if isodd(i)
-            nu=colors_freq[ceil(Int,(i-8)/2)]*freq_shift
-            #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and the camera
-            @views slope[i]=-calc_spectral_emission_coeficient(Ray[1:8],nu)*exp(-Ray[i+1])/nu^3
-        else
-            nu=-colors_freq[ceil(Int,(i-8)/2)]*freq_shift
-            #derivative of the optical depth which the ray "will" (hence the - sign) pass through in the "future" (+lambda) to get to the camera
-            @views slope[i]=-calc_spectral_absorbtion_coeficient(Ray[1:8],nu)*freq_shift
-        end
-    end
-    return slope
-end
-
-
-"""
 Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
 """
-function RKDP_Step_w_buffer!(Ray::Vector,y,last_slope::Vector,next_slope::Vector,raylength::Integer,
-                             stepsize::Real,colors_freq::Vector, abs_tol,rel_tol,prev_rejected::Bool, max_dt_scale::Real,
-                             buffer::Vector,k2::Vector,k3::Vector,k4::Vector,k5::Vector,k6::Vector,
-                             k7::Vector,source_vel::Vector,g::Matrix)
+function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
+                             stepsize::Real,colors_freq, abs_tol,rel_tol,prev_rejected::Bool, max_dt_scale::Real,
+                             buffer,k2,k3,k4,k5,k6,
+                             k7,source_vel,g)
     k1 = last_slope
     @views max_dt = pad_max_dt(Ray[1:8], max_dt_scale)
 
@@ -126,22 +82,24 @@ function RKDP_Step_w_buffer!(Ray::Vector,y,last_slope::Vector,next_slope::Vector
         Ray -= temp_stepsize*k1
 
         keepinbounds!(Ray)
-        
+        """
         @views if is_singularity(Ray[1:4]) || find_NaN(Ray[1:8])
             println("Bad Numbers Warning! ", Ray[1:8], " ",threadid())
         end
-        
+        """
         for i in 1:8
             if !calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
-                Ray -= temp_stepsize*calc_ray_derivative(Ray,raylength,colors_freq)
+                calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g)
+                Ray -= temp_stepsize*k1
                 keepinbounds!(Ray)
             end
-            
+            """
             @views if is_singularity(Ray[1:4])
                 println("Singularity Warning! ", Ray[1:8], " ",threadid())
             elseif find_NaN(Ray[1:8])
                 println("NaN Warning! ", Ray[1:8], " ",threadid())
             end
+            """
         end
 
         #check for horizons and stuff
@@ -150,7 +108,8 @@ function RKDP_Step_w_buffer!(Ray::Vector,y,last_slope::Vector,next_slope::Vector
             return Ray,stepsize,false
         end
         #then hand the ray back to the normal Runge-Kutta integrator
-        last_slope = calc_ray_derivative(Ray,raylength,colors_freq)
+        calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g)
+
         @views stepsize = -pad_max_dt(Ray[1:8], max_dt_scale)
     end
 

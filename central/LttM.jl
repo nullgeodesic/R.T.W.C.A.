@@ -1,28 +1,65 @@
 """
-v0.3.6
-December 18 2025
+v0.4.0
+December 22 2025
 Author: Levi Malmström
 """
 
+include("integrators_LttM.jl")
+
 using Base.Threads
+
+#CONSTANTS
+#Planck Constant in J/Hz
+const h = 6.62607015e-34
+#Reduced Planck Constant in J*s
+const ħ = h/(2*pi)
+#Speed of light in m/s
+const c = 299792458
+#π in Float64
+const π = Float64(π)
+#Boltzman Constant in J/K
+const k_B = 1.380649e-23
+#How many meters corespond to one unit of the map
+const map_scale = 1
+#Protects from dividing by zero in certain situations
+const no_div_zero = 1e-24
+#Color match function fit values
+const cie_matrix=[
+[0.362 1.056 -0.065 0.821 0.286 1.217 0.681];
+[442.0 599.8 501.1 568.8 530.9 437.0 459.0];
+[0.0624 0.0264 0.0490 0.0213 0.0613 0.0845 0.0385];
+[0.0374 0.0323 0.0382 0.0247 0.0322 0.0278 0.0725]]
+#Dormand-Prince Butcher tableau
+const DP_Butcher= [
+[0 0 0 0 0 0 0 0];
+[1/5 1/5 0 0 0 0 0 0];
+[3/10 3/40 9/40 0 0 0 0 0];
+[4/5 44/45 -56/15 32/9 0 0 0 0];
+[8/9 19372/6561 -25360/2187 64448/6561 -212/729 0 0 0];
+[1 9017/3168 -355/33 46732/5247 49/176 -5103/18656 0 0];
+[1 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
+[0 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
+[0 5179/57600 0 7571/16695 393/640 -92097/339200 187/2100 1/40]]
+
 
 """
 Runs the integration loop for a single pixel, then calculates it's xyY colorspace value.
 """
-function ray_kernel(ray,starting_timestep,tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,
+function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,
                     max_steps)
     #integrate ray
     dt=starting_timestep
-    raytrace=true
 
     #various 'buffers' to drastically reduce memory allocations
-    shared_slope=calc_ray_derivative(ray,raylength,colors_freq)
+    source_vel = [0.0,0.0,0.0,0.0]
+    g = Matrix{Float64}(I,4,4)
+    shared_slope = Array{Float64}(undef,raylength)
+    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g)
     last_slope = copy(shared_slope)
     next_slope = copy(shared_slope)
     buffer = similar(shared_slope)
     y = similar(shared_slope)
-    source_vel = [0.0,0.0,0.0,0.0]
-    g = Matrix{Float64}(I,4,4)
+
     k2 = similar(shared_slope)
     k3 = similar(shared_slope)
     k4 = similar(shared_slope)
@@ -30,7 +67,7 @@ function ray_kernel(ray,starting_timestep,tolerance,colors,colors_freq,raylength
     k6 = similar(shared_slope)
     k7 = similar(shared_slope)
     
-    
+    raytrace=true
     rejected=false
     step_count=0
     
@@ -65,21 +102,18 @@ end
 
 
 """
-Solves the rays given to it, feeding them into ray_kernel sequentialy.
+Solves the rays given to it, feeding them into integrate_ray sequentialy.
 """
-function iterate_on_pix_range(ray_bundle,img_bundle,tolerance::Real,colors,colors_freq,
+function ray_kernel(ray_bundle,img_bundle,tolerance::Real,colors,colors_freq,
                               raylength::Integer,abs_tol,rel_tol,max_dt_scale::Real,max_steps::Real,
                               start_time::UInt64)
     for i in 1:size(ray_bundle,1)
-        ray_bundle[i,:],img_bundle[i]=ray_kernel(ray_bundle[i,:],
+        ray_bundle[i,:],img_bundle[i]=integrate_ray(ray_bundle[i,:],
                                                      -pad_max_dt(ray_bundle[i,1:8],max_dt_scale),
                                                      tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,
                                                      max_dt_scale,max_steps)
     end
     #println("Elapsed time (ns): ",time_ns()-start_time, "; Thread ID: ",threadid())
-    #if find_NaN(img_bundle)
-        #println(find_NaN(ray_bundle)," ",threadid()," ",ray_bundle[1,1:8])
-    #end
     
     return ray_bundle,img_bundle
 end
@@ -125,9 +159,9 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     
     n_colors=length(colors)
     raylength=8+2*n_colors
-    f(x)=c*1e9/x
 
-    #initialize colors_freq
+    #initialize colors_freq (calculate frequency in units of nm^-1)
+    f(x)=1/x
     colors_freq=f.(colors)
 
     #make tolerance arrays
@@ -147,7 +181,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     chunks = Iterators.partition(1:num_pix,cld(num_pix,100*nthreads()))
     tasks = []
     tasks = map(chunks) do chunk
-        @spawn iterate_on_pix_range(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
+        @spawn ray_kernel(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
                                     deepcopy(tolerance),deepcopy(colors),deepcopy(colors_freq),
                                     deepcopy(raylength),deepcopy(abs_tol),deepcopy(rel_tol),
                                     deepcopy(max_dt_scale),deepcopy(max_steps),deepcopy(start_time))

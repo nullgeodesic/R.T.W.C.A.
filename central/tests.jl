@@ -1,6 +1,6 @@
 """
-v0.3.3
-October 10 2025
+v0.4.0
+Jan 1 2025
 Author: Levi Malmström
 """
 

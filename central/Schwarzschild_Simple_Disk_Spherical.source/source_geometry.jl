@@ -1,11 +1,11 @@
 """
-v0.3.7
-December 19 2025
+v0.4.0
+December 24 2025
 Author: Levi Malmström
 """
 
 #Spherical Schwarzschild Black Hole: (t,r,θ,ϕ);(γ,v,ω,ψ)
-const M = 1
+const M = map_scale
 const r_s = 2*M
 #r > r_s
 
@@ -13,7 +13,7 @@ const r_s = 2*M
 """
 Calculates the metric-matrix g_ij at a position (mutating).
 """
-function calc_lower_metric!(position,g::Matrix)
+function calc_lower_metric!(position,g)
     g[1,1] = -(1 - r_s/position[2])
     g[2,2] = inv(1 - r_s/position[2])
     g[3,3]=position[2]^2
@@ -121,7 +121,7 @@ end
 """
 Keeps the ray in the world bounds.
 """
-function keepinbounds!(ray::Vector)
+function keepinbounds!(ray)
 """
     if ray[2] <= 0
         ray[2] = -ray[2] + no_div_zero

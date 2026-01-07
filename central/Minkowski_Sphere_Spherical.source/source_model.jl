@@ -4,14 +4,30 @@ December 19 2025
 Author: Levi Malmström
 """
 
+#CONSTANTS
+#emission scale factor (to scale the rays at the end)
+#2h/c^2, but scaled to ν measured in 1/nm instead of Hz
+const emission_scale = 2*h*c*1e27
+#h/k_B in nm/K, instead of the normal s/K, because ν is in units of nm^-1, not Hz
+const ν_factor = h*c*1e9/k_B
+
+
+
 """
-Planck function.
+Planck function (ν in nm^-1).
 """
-function calc_planck(T,nu)
-    B_nu=2*h*nu^3/(c^2*(exp(h*nu/(k_B*T))-1))
-    return B_nu
+function calc_planck(T,ν)
+    B_ν = emission_scale*ν^3/(exp(ν_factor*ν/T)-1)
+    return B_ν
 end
 
+"""
+Planck function (ν in Hz).
+"""
+function calc_planck_Hz(T,ν)
+    B_ν = 2*h*ν^3/(c^2*(exp(h*ν/(k_B*T))-1))
+    return B_ν
+end
 
 """
 Gives the temperature at a position in Kelvin.
@@ -63,15 +79,15 @@ end
 """
 Keeps the integrator from going too fast.
 """
-function pad_max_dt(pos_vel,max_dt_scale)
+function pad_max_dt(ray,max_dt_scale)
     #dλ = 1/(|dλ1|^-1 + |dλ2|^-1 + |dλ3|^-1)
     #dλ1 = ϵ/(|v| + δ)
     #dλ2 = ϵ min(θ,π-θ)/(|ω| + δ)
     #dλ3 = ϵ/(|ψ| + δ)
-    max_step_size = min(inv(abs(inv(max_dt_scale/(abs(pos_vel[6])+no_div_zero)) +
-        no_div_zero) + abs(inv(max_dt_scale*min(pos_vel[3],π-pos_vel[3])/(abs(pos_vel[7]) +
+    max_step_size = min(inv(abs(inv(max_dt_scale/(abs(ray[6])+no_div_zero)) +
+        no_div_zero) + abs(inv(max_dt_scale*min(ray[3],π-ray[3])/(abs(ray[7]) +
         no_div_zero) + no_div_zero)) +
-        abs(inv(max_dt_scale/(abs(pos_vel[8])+no_div_zero) + no_div_zero)) + no_div_zero),0.5)
+        abs(inv(max_dt_scale/(abs(ray[8])+no_div_zero) + no_div_zero)) + no_div_zero),0.5)
     max_step_size = max(max_step_size,1e-12)
     return max_step_size
 end
