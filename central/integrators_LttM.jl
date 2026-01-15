@@ -1,6 +1,6 @@
 """
-v0.4.0
-December 30 2025
+v0.4.1
+January 15 2026
 Author: Levi Malmström
 """
 
@@ -29,8 +29,8 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
     end
 
     #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
-    get_source_velocity!(view(Ray,1:4),source_vel)
-    calc_lower_metric!(view(Ray,1:4),g)
+    get_source_velocity!(Ray,source_vel)
+    calc_lower_metric!(Ray,g)
     #using my own four loop instead of Julia's stock matrix multiplication
     #@views freq_shift=-transpose(source_vel)*g*Ray[5:8]
     freq_shift = 0
@@ -49,13 +49,14 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
     for i in 9:raylength
         if isodd(i)
             nu=colors_freq[ceil(Int,(i-8)/2)]*freq_shift
-            #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and the camera
-            @views slope[i] = -calc_spectral_emission_coeficient(Ray[1:8],nu)*exp(-Ray[i+1])/nu^3
+            #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and
+            #the camera
+            slope[i] = -calc_spectral_emission_coeficient(Ray,nu)*exp(-Ray[i+1])/nu^3
         else
             nu=-colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the optical depth which the ray "will" (hence the - sign) pass through in the "future"
             #(+lambda) to get to the camera
-            @views slope[i]=-calc_spectral_absorbtion_coeficient(Ray[1:8],nu)*freq_shift
+            slope[i]=-calc_spectral_absorbtion_coeficient(Ray,nu)*freq_shift
         end
     end
     return nothing
@@ -70,15 +71,16 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
                              buffer,k2,k3,k4,k5,k6,
                              k7,source_vel,g)
     k1 = last_slope
-    @views max_dt = pad_max_dt(Ray[1:8], max_dt_scale)
+    max_dt = pad_max_dt(Ray, max_dt_scale)
 
     #check for and deal with singularities
-    @views warn_singularity, temp_stepsize = near_singularity(Ray[1:8],stepsize,abs_tol)
+    warn_singularity, temp_stepsize = near_singularity(Ray,stepsize,abs_tol)
     if warn_singularity
         #switch to an euler method scheme that should hopefully dodge the singularity itself
-        #println("Grazed singularity! ", threadid(), " ", Ray[1:8])
-
-        Ray -= temp_stepsize*k1
+        #Ray -= temp_stepsize*k1
+        for i in 1:raylength
+            Ray[i] -= temp_stepsize*k1[i]
+        end
 
         keepinbounds!(Ray)
         """
@@ -89,7 +91,10 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
         for i in 1:8
             if !calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
                 calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g)
-                Ray -= temp_stepsize*k1
+                #Ray -= temp_stepsize*k1
+                for j in 1:raylength
+                    Ray[j] -= temp_stepsize*k1[j]
+                end
                 keepinbounds!(Ray)
             end
             """
@@ -104,12 +109,12 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
         #check for horizons and stuff
         if calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
             #return terminal ray
-            return Ray,stepsize,false
+            return stepsize,false
         end
         #then hand the ray back to the normal Runge-Kutta integrator
         calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g)
 
-        @views stepsize = -pad_max_dt(Ray[1:8], max_dt_scale)
+        @views stepsize = -pad_max_dt(Ray, max_dt_scale)
     end
 
     #'buffer' is used to cut out the memory allocations on array math
@@ -217,7 +222,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
             last_slope[i] = next_slope[i]
             Ray[i] = y[i]
         end
-        return Ray,stepsize,false
+        return stepsize,false
     elseif error > 1
         #error too large; send back to manager marked as rejected, with new step size
         if prev_rejected && abs(new_stepsize)>=abs(stepsize)
@@ -225,7 +230,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
             new_stepsize=stepsize/2
         end
         keepinbounds!(Ray)
-        return Ray,new_stepsize,true
+        return new_stepsize,true
     else
         #error small enough; send updated stats marked as accepted, with new step size
         #keep stepsize from increasing quickly
@@ -237,6 +242,6 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
             last_slope[i] = next_slope[i]
             Ray[i] = y[i]
         end
-        return Ray,new_stepsize,false
+        return new_stepsize,false
     end
 end

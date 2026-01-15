@@ -1,6 +1,6 @@
 """
-v0.4.0
-December 23 2025
+v0.4.1
+January 15 2026
 Author: Levi Malmström
 """
 
@@ -37,13 +37,25 @@ include("gen_geometry.jl")
 include("color_theory.jl")
 include("special_functions.jl")
 include("tests.jl")
+include("64BitConstants.jl")
+include("32BitConstants.jl")
 
-#CPU integration setup
-include("LttM.jl")
 
-
-#GPU integration setup
-#include("5P.jl")
+if mode == "LttM"
+    #CPU integration setup
+    include("LttM.jl")
+    #π in Float64
+    const π = Float64(π)
+    #Float64 constants
+    using .BitConsts64
+elseif mode == "5P"
+    #GPU integration setup
+    include("5P.jl")
+    #π in Float32
+    const π = Float32(π)
+    #Float32 constants
+    using .BitConsts32
+end
 
 
 """

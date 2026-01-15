@@ -1,9 +1,15 @@
 """
-v0.3.2
-October 3 2025
+v0.4.1
+January 15 2026
 Author: Levi Malmström
 """
 
+#Color match function fit values
+const cie_matrix=[
+[0.362 1.056 -0.065 0.821 0.286 1.217 0.681];
+[442.0 599.8 501.1 568.8 530.9 437.0 459.0];
+[0.0624 0.0264 0.0490 0.0213 0.0613 0.0845 0.0385];
+[0.0374 0.0323 0.0382 0.0247 0.0322 0.0278 0.0725]]
 
 """
 Selector function for the fits of the color matching functions.

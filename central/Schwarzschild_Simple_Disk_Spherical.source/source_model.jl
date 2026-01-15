@@ -1,24 +1,15 @@
 """
-v0.4.0
-December 24 2025
+v0.4.1
+January 15 2026
 Author: Levi Malmström
 """
 
-#CONSTANTS
-#emission scale factor (to scale the rays at the end)
-#2h/c^2, but scaled to ν measured in 1/nm instead of Hz
-const emission_scale = 2*h*c*1e27
-#h/k_B in nm/K, instead of the normal s/K, because ν is in units of nm^-1, not Hz
-const ν_factor = h*c*1e9/k_B
-
-
-
 """
-Planck function (ν in nm^-1).
+Planck function (f in nm^-1).
 """
-function calc_planck(T,ν)
-    B_ν = emission_scale*ν^3/(exp(ν_factor*ν/T)-1)
-    return B_ν
+function calc_planck(T,f)
+    B_f = emission_scale*f^3/(exp(f_factor*f/T)-1)
+    return B_f
 end
 
 """
@@ -140,10 +131,32 @@ end
 Whether to stop integrating the ray.
 """
 function calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale, max_steps,step_count)
-    @views if step_count >= max_steps || minimum(ray[9:2:end]) >=
+    terminate = false
+    if step_count >= max_steps || ray[2] > 100 || ray[2] <= (10*rel_tol[2] + 2)*r_s || ray[4] > 8π
+        terminate = true
+    else
+        terminate = true
+        for i in 10:2:raylength
+            if ray[i] < -log(abs_tol[10])
+                terminate = false
+            end
+        end
+    end
+
+    return terminate
+end
+
+
+
+"""
+Whether to stop integrating the ray.
+
+function calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale, max_steps,step_count)
+    @views if step_count >= max_steps || minimum(ray[10:2:end]) >=
         -log(abs_tol[10]) || ray[2] > 100 || ray[2] <= (10*rel_tol[2] + 2)*r_s || ray[4] > 8π
         return true
     else
         return false
     end
 end
+"""

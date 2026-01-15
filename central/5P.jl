@@ -1,6 +1,6 @@
 """
-v0.4.0
-December 22 2025
+v0.4.1
+January 15 2026
 Author: Levi Malmström
 """
 
@@ -9,42 +9,10 @@ using Pkg
 using CUDA
 #Pkg.add("StaticArrays")
 using StaticArrays
+using Base.Threads
 
 include("integrators_5P.jl")
 include("tests_5P.jl")
-
-#CONSTANTS
-#Planck Constant in J/Hz
-const h = Float32(6.62607015e-34)
-#Reduced Planck Constant in J*s
-const ħ = Float32(h/(2*pi))
-#Speed of light in m/s
-const c = Int32(299792458)
-# π ∈ Irrational doesn't play well with CUDA.jl, so we'll just set it to be type Float32.
-const π = Float32(π)
-#Boltzman Constant in J/K
-const k_B = Float32(1.380649e-23)
-#How many meters corespond to one unit of the map
-const map_scale = Float32(1)
-#Protects from dividing by zero in certain situations
-const no_div_zero = Float32(1e-24)
-#Color match function fit values
-const cie_matrix=[
-[0.362 1.056 -0.065 0.821 0.286 1.217 0.681];
-[442.0 599.8 501.1 568.8 530.9 437.0 459.0];
-[0.0624 0.0264 0.0490 0.0213 0.0613 0.0845 0.0385];
-[0.0374 0.0323 0.0382 0.0247 0.0322 0.0278 0.0725]]
-#Dormand-Prince Butcher table
-const DP_Butcher= Array{Float32}([
-[0 0 0 0 0 0 0 0];
-[1/5 1/5 0 0 0 0 0 0];
-[3/10 3/40 9/40 0 0 0 0 0];
-[4/5 44/45 -56/15 32/9 0 0 0 0];
-[8/9 19372/6561 -25360/2187 64448/6561 -212/729 0 0 0];
-[1 9017/3168 -355/33 46732/5247 49/176 -5103/18656 0 0];
-[1 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
-[0 35/384 0 500/1113 125/192 -2187/6784 11/84 0];
-[0 5179/57600 0 7571/16695 393/640 -92097/339200 187/2100 1/40]])
 
 
 #println(CUDA.versioninfo())
@@ -55,7 +23,7 @@ Runs the integration loop for a single pixel.
 function integrate_ray(ray,starting_timestep,colors,colors_freq,::Val{raylength},abs_tol,rel_tol,max_dt_scale,
                     max_steps) where raylength
     #integrate ray
-    dt=starting_timestep
+    dt = starting_timestep
     
     #various 'buffers' to drastically reduce memory allocations
     source_vel = @MVector zeros(Float32,4)
@@ -66,7 +34,7 @@ function integrate_ray(ray,starting_timestep,colors,colors_freq,::Val{raylength}
 
     #calculate initial derivative
     calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g)
-    for i in 1:raylength
+    @inbounds for i in 1:raylength
         last_slope[i] = shared_slope[i]
         next_slope[i] = shared_slope[i]
     end
@@ -85,14 +53,24 @@ function integrate_ray(ray,starting_timestep,colors,colors_freq,::Val{raylength}
     rejected = false
     raytrace=true
     step_count = 0
+
     
-    for i in 1:raylength
-        ray[i] += dt*shared_slope[i]
+    while raytrace
+        dt,rejected = RKDP_Step_w_buffer!(ray,y,last_slope,next_slope,raylength,dt,colors_freq,
+                                                         abs_tol, rel_tol,rejected,max_dt_scale,buffer,
+                                                         k2,k3,k4,k5,k6,k7,source_vel,g)
+        step_count+=1
+
+        
+        #my current termination condition
+        if calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,
+                          max_dt_scale, max_steps,step_count)
+            raytrace=false
+        end
     end
     
     return ray
 end
-
 
 
 function ray_kernel!(long_ray_matrix,colors,colors_freq,
@@ -104,7 +82,7 @@ function ray_kernel!(long_ray_matrix,colors,colors_freq,
     for i = index:stride:num_pix
         ray = @MVector zeros(Float32,raylength)
         for j in 1:raylength
-            ray[j] = long_ray_matrix[i,j]
+            @inbounds ray[j] = long_ray_matrix[i,j]
         end
         
         starting_timestep = -pad_max_dt(ray,max_dt_scale)
@@ -114,7 +92,7 @@ function ray_kernel!(long_ray_matrix,colors,colors_freq,
         
         
         for j in 1:raylength
-            long_ray_matrix[i,j] = ray[j]
+            @inbounds long_ray_matrix[i,j] = ray[j]
         end
         
     end
@@ -123,7 +101,14 @@ function ray_kernel!(long_ray_matrix,colors,colors_freq,
 end
 
 
+function color_kernel(ray_bundle,img_bundle,colors,colors_freq)
+    for i in 1:size(ray_bundle,1)
+        img_bundle[i] = calc_xyY(ray_bundle[i,:],colors,colors_freq)
+    end
+    return img_bundle
+end
 
+                       
 """
     gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
                         camera_point=[0.0,0.0,0.0],x_pix=40,max_steps=1e3,colors=[400,550,700],
@@ -168,10 +153,10 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     ray_matrix_shape = size(ray_matrix)
     
     #initialize xyY pixels
-    xyY_img=zeros(xyY{Float64},x_pix,ray_matrix_shape[2])
-    
+    xyY_img = zeros(xyY{Float64},x_pix,ray_matrix_shape[2])
+    long_xyY_img = reshape(xyY_img,num_pix)
 
-    f(x)=c*1e9/x
+    f(x)=1/x
 
     #initialize colors_freq
     colors_freq = f.(colors)
@@ -182,7 +167,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
 
 
 
-    #transfer/transfrom data to GPU
+    #transfer/transfrom data to Device
     Cu_ray_matrix = CuArray{Float32}(long_ray_matrix)
     Cu_colors = CuArray{Float32}(colors)
     Cu_colors_freq = CuArray{Float32}(colors_freq)
@@ -199,13 +184,60 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     println("Threads: ", threads)
     println("Blocks: ", blocks)
 
+    #Integrate the rays on the Device
     CUDA.@sync begin
         Cu_ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
                                                    Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
                                                    Int32(max_steps),Int32(num_pix); threads, blocks)
     end
-    
+    #Bring back the integrated rays to the host
     long_ray_matrix = Array(Cu_ray_matrix)
-    ray_matrix = reshape(long_ray_matrix,(x_pix,y_pix,raylength))
-    println(ray_matrix[1,1,:])
+
+    #Calculate the colors of pixels
+    chunks = Iterators.partition(1:num_pix,cld(num_pix,100*nthreads()))
+    tasks = []
+    tasks = map(chunks) do chunk
+        @spawn color_kernel(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
+                            deepcopy(colors),deepcopy(colors_freq))
+    end
+    finished_bundles = fetch.(tasks)
+    index_counter = 1
+    for i in 1:length(finished_bundles)
+        for j in 1:size(finished_bundles[i],1)
+            long_xyY_img[index_counter] = finished_bundles[i][j]
+            index_counter += 1
+        end
+    end
+
+    #transform back into a grid
+    ray_matrix=reshape(long_ray_matrix,(x_pix,y_pix,raylength))
+    xyY_img=reshape(long_xyY_img,(x_pix,y_pix))
+
+    #check that any rays even hit anything, and return a blank image if they didn't
+    max_pixel_val = maxfinite(xyY_img)
+    if comp3(max_pixel_val) <= 0
+        println("Image blank")
+        if returnrays
+            return zeros(RGB{N0f16},size(ray_matrix,2),size(ray_matrix,1)),ray_matrix
+        else
+            return zeros(RGB{N0f16},size(ray_matrix,2),size(ray_matrix,1))
+        end
+    end
+    
+    #scale the image
+    scaler = scaleminmax(0,comp3(max_pixel_val))
+    for i in 1:size(xyY_img,1)
+        for j in 1:size(xyY_img,2)
+            xyY_img[i,j] = xyY{Float64}(comp1(xyY_img[i,j]),comp2(xyY_img[i,j]),scaler(comp3(xyY_img[i,j])))
+        end
+    end
+    
+    
+    #convert to rgb and return
+    RGB_img = convert.(RGB{N0f16},xyY_img)
+    if returnrays
+        return transpose(reverse(RGB_img,dims=2)),ray_matrix
+    else
+        return transpose(reverse(RGB_img,dims=2))
+    end
 end

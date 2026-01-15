@@ -130,9 +130,6 @@ function keepinbounds!(ray)
         ray[7] = -ray[7]
     end
 """
-    if ray[2] <= 1
-        println("Murphy's Law!")
-    end
     if ray[3] < 0
         ray[3] = -ray[3]
         ray[4] -= π
