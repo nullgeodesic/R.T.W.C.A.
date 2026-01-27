@@ -1,6 +1,6 @@
 """
-v0.4.1
-January 15 2026
+v0.4.2
+January 27 2026
 Author: Levi Malmström
 """
 
@@ -20,7 +20,7 @@ include("tests_5P.jl")
 """
 Runs the integration loop for a single pixel.
 """
-function integrate_ray(ray,starting_timestep,colors,colors_freq,::Val{raylength},abs_tol,rel_tol,max_dt_scale,
+@inline function integrate_ray!(ray,starting_timestep,colors,colors_freq,::Val{raylength},abs_tol,rel_tol,max_dt_scale,
                     max_steps) where raylength
     #integrate ray
     dt = starting_timestep
@@ -68,8 +68,6 @@ function integrate_ray(ray,starting_timestep,colors,colors_freq,::Val{raylength}
             raytrace=false
         end
     end
-    
-    return ray
 end
 
 
@@ -87,7 +85,7 @@ function ray_kernel!(long_ray_matrix,colors,colors_freq,
         
         starting_timestep = -pad_max_dt(ray,max_dt_scale)
         
-        ray = integrate_ray(ray,starting_timestep,colors,colors_freq,Val(raylength),abs_tol,rel_tol,max_dt_scale,
+        integrate_ray!(ray,starting_timestep,colors,colors_freq,Val(raylength),abs_tol,rel_tol,max_dt_scale,
                             max_steps)
         
         
@@ -173,6 +171,13 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     Cu_colors_freq = CuArray{Float32}(colors_freq)
     Cu_abs_tol = CuArray{Float32}(abs_tol)
     Cu_rel_tol = CuArray{Float32}(rel_tol)
+
+    #code for debugging kernel"
+    """
+    @device_code_llvm raw=true dump_module=true @cuda ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
+                                                   Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
+                                                   Int32(max_steps),Int32(num_pix))
+    """
     
     #compile the kernel and make the configuration
     Cu_ray_kernel! = @cuda launch=false ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
@@ -184,12 +189,15 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     println("Threads: ", threads)
     println("Blocks: ", blocks)
 
+    
     #Integrate the rays on the Device
+    
     CUDA.@sync begin
         Cu_ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
                                                    Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
                                                    Int32(max_steps),Int32(num_pix); threads, blocks)
     end
+    
     #Bring back the integrated rays to the host
     long_ray_matrix = Array(Cu_ray_matrix)
 

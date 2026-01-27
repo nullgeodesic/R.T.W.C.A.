@@ -1,6 +1,6 @@
 """
-v0.4.0
-December 24 2025
+v0.4.2
+January 27 2026
 Author: Levi Malmström
 """
 
@@ -13,7 +13,7 @@ const r_s = 2*M
 """
 Calculates the metric-matrix g_ij at a position (mutating).
 """
-function calc_lower_metric!(position,g)
+@inline function calc_lower_metric!(position,g)
     g[1,1] = -(1 - r_s/position[2])
     g[2,2] = inv(1 - r_s/position[2])
     g[3,3]=position[2]^2
@@ -51,7 +51,7 @@ end
 """
 Calculates the Christoffel symbols of the second kind at a position.
 """
-function calc_christoffel_udd(ray,index::Tuple)
+@inline function calc_christoffel_udd(ray,index::Tuple)
     if index[1]==1
         if (index[2] == 1 && index[3] == 2) || (index[2] == 2 && index[3] == 1)
             return r_s/(2*ray[2]*(ray[2] - r_s))
@@ -95,7 +95,7 @@ end
 """
 Determines if the ray is near a coordinate singularity.
 """
-function near_singularity(ray,stepsize::Real,abs_tol)
+@inline function near_singularity(ray,stepsize::Real,abs_tol)
     dθ = stepsize*ray[7]
     θ_new = ray[3] + dθ
     dr = stepsize*ray[6]
@@ -121,7 +121,7 @@ end
 """
 Keeps the ray in the world bounds.
 """
-function keepinbounds!(ray)
+@inline function keepinbounds!(ray)
 """
     if ray[2] <= 0
         ray[2] = -ray[2] + no_div_zero
@@ -153,7 +153,7 @@ end
 """
 If the ray is on a coordinate singularity.
 """
-function is_singularity(position)
+@inline function is_singularity(position)
     if abs(position[2]) <= 1e-323
         return true
     elseif abs(position[3]) <= 1e-323 || abs(position[3] - π) <= 1e-323

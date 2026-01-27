@@ -1,6 +1,6 @@
 """
-v0.4.1
-January 15 2026
+v0.4.2
+January 27 2026
 Author: Levi Malmström
 """
 
@@ -8,7 +8,7 @@ Author: Levi Malmström
 """
 Calculates the derivative of the ray with respect to affine parameter (mutating).
 """
-function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel,g)
+@inline function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel,g)
     #calculate derivative at a point
     for i in 1:4
         #dx/dl=v
@@ -66,7 +66,7 @@ end
 """
 Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
 """
-function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
+@inline function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
                              stepsize::Real,colors_freq, abs_tol,rel_tol,prev_rejected::Bool, max_dt_scale::Real,
                              buffer,k2,k3,k4,k5,k6,
                              k7,source_vel,g)
