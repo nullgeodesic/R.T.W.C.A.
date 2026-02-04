@@ -24,6 +24,15 @@ end
 
 
 """
+Calculates the vierbein at a position.
+"""
+function calc_vierbein(position)
+    #In this build I'm going with cartesian minkowski space
+    return Matrix{Float64}(I,4,4)
+end
+
+
+"""
 Calculates the inverse vierbein at a position.
 """
 function calc_inv_vierbein(position)

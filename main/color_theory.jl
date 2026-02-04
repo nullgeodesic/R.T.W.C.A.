@@ -1,6 +1,4 @@
 """
-v0.4.1
-January 15 2026
 Author: Levi Malmström
 """
 
@@ -20,7 +18,7 @@ end
 
 
 """
-A fit for the CIE X color matching function.
+A fit for the CIE X color matching function (~red).
 """
 function cie_x(wavelength)
     x=0
@@ -33,7 +31,7 @@ end
 
 
 """
-A fit for the CIE Y color matching function.
+A fit for the CIE Y color matching function (~green).
 """
 function cie_y(wavelength)
     y=0
@@ -46,7 +44,7 @@ end
 
 
 """
-A fit for the CIE Z color matching function.
+A fit for the CIE Z color matching function (~blue).
 """
 function cie_z(wavelength)
     z=0
@@ -77,19 +75,19 @@ end
 Calculates the xyY colorspace coordinates of a ray from it's spectrum.
 """
 function calc_xyY(ray,colors,colors_freq)
-    I_λs=ray_to_I_λ(ray,colors,colors_freq)
+    I_λs = ray_to_I_λ(ray,colors,colors_freq)
     
-    I_interpolation=linear_interpolation(colors,I_λs)
+    I_interpolation = linear_interpolation(colors,I_λs)
     
     delXYZ(λ,p) = I_interpolation(λ)*[cie_x(λ),cie_y(λ),cie_z(λ)]
     domain = (minimum(colors),maximum(colors))
-    prob=IntegralProblem(delXYZ,domain)
-    CIEXYZ=solve(prob,HCubatureJL();reltol=1e-3,abstol=1e-3)   
+    prob = IntegralProblem(delXYZ,domain)
+    CIEXYZ = solve(prob,HCubatureJL();reltol=1e-3,abstol=1e-3)   
     if CIEXYZ[1] != 0 && CIEXYZ[2] != 0 && CIEXYZ[3] != 0
-        CIEXYZ=XYZ{Float64}(CIEXYZ[1],CIEXYZ[2],CIEXYZ[3])
-        CIExyY=xyY(CIEXYZ)
+        CIEXYZ = XYZ{Float64}(CIEXYZ[1],CIEXYZ[2],CIEXYZ[3])
+        CIExyY = xyY(CIEXYZ)
     else
-        CIExyY=xyY{Float64}(1,1,0)
+        CIExyY = xyY{Float64}(1,1,0)
     end
     return CIExyY
 end

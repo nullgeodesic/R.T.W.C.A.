@@ -129,3 +129,9 @@ Whether to stop integrating the ray.
 
     return terminate
 end
+
+
+function skybox_handling!(ray,raylength,colors,colors_freq,beamsize)
+    #no skybox
+    return nothing
+end

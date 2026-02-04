@@ -1,6 +1,4 @@
 """
-v0.3.5
-December 12 2025
 Author: Levi Malmström
 """
 
@@ -56,30 +54,32 @@ function gen_final_rotation_matrix(direction=[0,0])
     k=cross([0,0,1],d)
     mag_k = sqrt(transpose(k)*k)
     if mag_k > 0
-        k=k/mag_k
+        k = k/mag_k
         
         #cross product matrix
-        K=zeros(3,3)
-        K[1,2]=-k[3]
-        K[1,3]=k[2]
-        K[2,1]=k[3]
-        K[2,3]=-k[1]
-        K[3,1]=-k[2]
-        K[3,2]=k[1]
+        K = zeros(3,3)
+        K[1,2] = -k[3]
+        K[1,3] = k[2]
+        K[2,1] = k[3]
+        K[2,3] = -k[1]
+        K[3,1] = -k[2]
+        K[3,2] = k[1]
         
         #make a 3d rotation matrix
-        R_3d=Matrix{Float64}(I,3,3)
-        R_3d=R_3d + sin(direction[1])*K + (1-cos(direction[1]))*K*K
+        R_3d = Matrix{Float64}(I,3,3)
+        R_3d = R_3d + sin(direction[1])*K + (1-cos(direction[1]))*K*K
         
         #make it 4d
-        R=zeros(4,4)
-        R[1,1]=1
-        R[2:4,2:4]=R_3d
+        R = zeros(4,4)
+        R[1,1] = 1
+        R[2:4,2:4] = R_3d
         #transpose to give proper handedness
-        R=transpose(R)
+        R = transpose(R)
+        #compensate for unintended roll induced by the transformation
+        R = R*gen_intrinsic_rotation_matrix([0,0,π/2 + direction[2]])
     else
         println("Final Rotation: Camera velocity already aligned with FIDO z-axis; returning identity matrix")
-        R=Matrix{Float64}(I,4,4)
+        R = Matrix{Float64}(I,4,4)
     end
     return R
 end
@@ -98,4 +98,23 @@ function lorentz_boost_z(beta)
     Lambda[3,3]=1
     Lambda[4,4]=gamma
     return Lambda
+end
+
+
+"""
+Returns a matrix that transforms a four vector based at the origin from spherical coordinates
+to cartesian coordinates.
+"""
+function R_sph_to_cart(position)
+    R = zeros(4,4)
+    R[1,1] = 1
+    R[2,2] = sin(position[3])*cos(position[4])
+    R[2,3] = cos(position[3])*cos(position[4])
+    R[2,4] = -sin(position[4])
+    R[3,2] = sin(position[3])*sin(position[4])
+    R[3,3] = cos(position[3])*sin(position[4])
+    R[3,4] = cos(position[4])
+    R[4,2] = cos(position[3])
+    R[4,3] = -sin(position[3])
+    return R
 end

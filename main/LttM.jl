@@ -10,7 +10,7 @@ using Base.Threads
 Runs the integration loop for a single pixel, then calculates it's xyY colorspace value.
 """
 function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,
-                    max_steps)
+                    max_steps,beamsize::Real)
     #integrate ray
     dt=starting_timestep
 
@@ -47,7 +47,7 @@ function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylen
             raytrace=false
         end
     end
-    
+    skybox_handling!(ray,raylength,colors,colors_freq,beamsize::Real)
     #calculate pixel value
     xyY_pix=calc_xyY(ray,colors,colors_freq)
     return ray,xyY_pix
@@ -59,12 +59,12 @@ Solves the rays given to it, feeding them into integrate_ray sequentialy.
 """
 function ray_kernel(ray_bundle,img_bundle,tolerance::Real,colors,colors_freq,
                               raylength::Integer,abs_tol,rel_tol,max_dt_scale::Real,max_steps::Real,
-                              start_time::UInt64)
+                              start_time::UInt64,beamsize::Real)
     for i in 1:size(ray_bundle,1)
         ray_bundle[i,:],img_bundle[i]=integrate_ray(ray_bundle[i,:],
                                                      -pad_max_dt(ray_bundle[i,1:8],max_dt_scale),
                                                      tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,
-                                                     max_dt_scale,max_steps)
+                                                     max_dt_scale,max_steps,beamsize)
     end
     #println("Elapsed time (ns): ",time_ns()-start_time, "; Thread ID: ",threadid())
     
@@ -104,8 +104,8 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     end
 
     #initialize rays
-    ray_matrix=initialize_camera(camera_pos,direction=camera_dir,β=speed,pointing=camera_point,
-                                 horizontal_pixels=x_pix,colors=colors,fov_hor=fov_hor, fov_vert=fov_vert)
+    ray_matrix, beamsize = initialize_camera(camera_pos,direction=camera_dir,β=speed,pointing=camera_point,
+                                 horizontal_pixels=x_pix,colors=colors,fov_hor=fov_hor,fov_vert=fov_vert)
     #initialize xyY pixels
     #xyY_img=Array{xyY{Float64}}(undef,size(ray_matrix,1),size(ray_matrix,2))
     xyY_img=zeros(xyY{Float64},x_pix,size(ray_matrix,2))
@@ -140,7 +140,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
         @spawn ray_kernel(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
                                     deepcopy(tolerance),deepcopy(colors),deepcopy(colors_freq),
                                     deepcopy(raylength),deepcopy(abs_tol),deepcopy(rel_tol),
-                                    deepcopy(max_dt_scale),deepcopy(max_steps),deepcopy(start_time))
+                                    deepcopy(max_dt_scale),deepcopy(max_steps),deepcopy(start_time),beamsize)
     end
     finished_bundles=fetch.(tasks)
     

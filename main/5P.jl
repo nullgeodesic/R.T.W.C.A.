@@ -97,9 +97,12 @@ function ray_kernel!(long_ray_matrix,colors,colors_freq,
 end
 
 
-function color_kernel(ray_bundle,img_bundle,colors,colors_freq)
+function color_kernel!(ray_bundle,img_bundle,colors,colors_freq,raylength::Integer,beamsize::Real)
     for i in 1:size(ray_bundle,1)
-        img_bundle[i] = calc_xyY(ray_bundle[i,:],colors,colors_freq)
+        @views ray = ray_bundle[i,:]
+        skybox_handling!(ray,raylength,colors,colors_freq,beamsize)
+        #calculate pixel value
+        img_bundle[i] = calc_xyY(ray,colors,colors_freq)
     end
     return img_bundle
 end
@@ -136,7 +139,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     end
 
     #initialize rays
-    ray_matrix = initialize_camera(camera_pos,direction=camera_dir,β=speed,pointing=camera_point,
+    ray_matrix, beamsize = initialize_camera(camera_pos,direction=camera_dir,β=speed,pointing=camera_point,
                                    horizontal_pixels=x_pix,colors=colors,fov_hor=fov_hor, fov_vert=fov_vert)
     y_pix=size(ray_matrix,2)
     num_pix=x_pix*y_pix
@@ -204,8 +207,8 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     chunks = Iterators.partition(1:num_pix,cld(num_pix,100*nthreads()))
     tasks = []
     tasks = map(chunks) do chunk
-        @spawn color_kernel(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
-                            deepcopy(colors),deepcopy(colors_freq))
+        @spawn color_kernel!(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
+                            deepcopy(colors),deepcopy(colors_freq),raylength,beamsize)
     end
     finished_bundles = fetch.(tasks)
     index_counter = 1

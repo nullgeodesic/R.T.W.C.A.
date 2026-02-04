@@ -79,7 +79,7 @@ function initialize_world(input_string::String)
         
         direction = [π/2,0]
         
-        pointing = [0.0,0.0,0.0]
+        pointing = [0.0,0.0,-π/2]
         
         β = 0.0
     elseif input_string == "minkowski_t,r,θ,ϕ_sphere"
@@ -89,7 +89,7 @@ function initialize_world(input_string::String)
         
         direction = [π/2,0]
         
-        pointing = [0.0,0.0,0.0]
+        pointing = [0.0,0.0,-π/2]
         
         β = 0.0
     elseif input_string == "minkowski_t,x,y,z_sphere"
@@ -101,6 +101,16 @@ function initialize_world(input_string::String)
 
         pointing = [0.0,0.0,0.0]
 
+        β = 0.0
+    elseif input_string == "wormhole"
+        include("Wormhole.source/source_main.jl")
+
+        position = [0,25,π/3,0]
+        
+        direction = [π/2,0]
+        
+        pointing = [0.0,0.0,-π/2]
+        
         β = 0.0
     else
         println("Type source startup file name e.g. Schwarzschild_Simple_Disk_Spherical.source/source_main.jl")
@@ -133,7 +143,8 @@ end
 Initialize the camera/rays from user input.
 # Arguments
 - 'position': the 4-position of the camera
-- 'direction': two angles determining the direction of the camera's 3-velocity relative to the tetrad/FIDO.
+- 'direction': two angles in radians determining the direction of the camera's 3-velocity relative to
+the tetrad/FIDO. The first coordinate has range [0,π], the second has range [0,2π]
 - 'β': the magnitude of the camera's 3-velocity relative to the tetrad/FIDO in units of c.
 - 'pointing': the orientation of the camera relative to it's velocity vector.
 - 'horizontal_pixels=1024': the size of the bottom of the image, in pixels.
@@ -142,7 +153,8 @@ Initialize the camera/rays from user input.
 - 'colors=[400,550,700]': the wavelengths in nm that will be used to create the image.
 """
 function initialize_camera(position::Vector; direction=[0.0,0.0], β=0.0::Real, pointing=[0.0,0.0,0.0],
-                           horizontal_pixels=1024::Integer, fov_hor=85::Real, fov_vert=60::Real, colors=[400,550,700])
+                           horizontal_pixels=1024::Integer, fov_hor=85::Real, fov_vert=60::Real,
+                           colors=[400,550,700])
     #convert to radians
     fov_hor=π*fov_hor/180
     fov_vert=π*fov_vert/180
@@ -169,7 +181,6 @@ function initialize_camera(position::Vector; direction=[0.0,0.0], β=0.0::Real, 
             h=rho_vert*(j-0.5)-H
             θ=atan(sqrt(w^2 + h^2))
 
-            #phi=sign(h)*acos(w/sqrt(w^2 + h^2))
             if w>0
                 ϕ =atan(h/w)
             elseif w<0 && h>=0
@@ -207,13 +218,16 @@ function initialize_camera(position::Vector; direction=[0.0,0.0], β=0.0::Real, 
             S[i,j,5:8]=e*R2*L*R*S[i,j,5:8]
         end
     end
-    return S
+
+    #calculate the angular size of a pixel
+    beamsize = fov_hor/horizontal_pixels    
+    return S,beamsize
 end
 
 
 runtests = true
 #comment out next line to run tests
-runtests = false
+#runtests = false
 if runtests
     print("Type the test you would like to perform (e.g. 'bh_simple'): ")
     test_mode = lowercase(readline())
@@ -223,9 +237,11 @@ if runtests
     if test_mode == "cart_sph"
         position, direction, pointing, β = initialize_world("minkowski_t,x,y,z_sphere")
         colors=range(350,step=30,stop=750)
-        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,x_pix=100,speed=β,print_num_pix=true)
+        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,x_pix=100,speed=β,
+                        camera_point = pointing,print_num_pix=true)
         
-        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,print_num_pix=true)
+        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,
+                                       camera_point = pointing,print_num_pix=true)
 
         test_csv_ref = DataFrame(load("Test Results/TestResults.csv"))
         test_csv = copy(test_csv_ref)
@@ -249,9 +265,11 @@ if runtests
     elseif test_mode == "sph_sph"
         position, direction, pointing, β = initialize_world("minkowski_t,r,θ,ϕ_sphere")
         colors=range(350,step=30,stop=750)
-        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,x_pix=100,speed=β,print_num_pix=true)
+        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,
+                        max_steps=1e4,x_pix=100,speed=β,camera_point = pointing,print_num_pix=true)
         
-        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,print_num_pix=true)
+        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,
+                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,print_num_pix=true)
         
         test_csv_ref = DataFrame(load("Test Results/TestResults.csv"))
         test_csv = copy(test_csv_ref)
@@ -274,9 +292,11 @@ if runtests
     elseif test_mode == "bh_simple"
         position, direction, pointing, β = initialize_world("schwarzschild_t,r,θ,ϕ_simpledisk")
         colors=range(350,step=30,stop=750)
-        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,x_pix=100,speed=β,print_num_pix=true)
+        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,
+                        x_pix=100,speed=β,camera_point = pointing,print_num_pix=true)
         
-        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,print_num_pix=true)
+        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,
+                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,print_num_pix=true)
         
         test_csv_ref = DataFrame(load("Test Results/TestResults.csv"))
         test_csv = copy(test_csv_ref)
