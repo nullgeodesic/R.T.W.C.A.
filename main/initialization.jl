@@ -105,7 +105,7 @@ function initialize_world(input_string::String)
     elseif input_string == "wormhole"
         include("Wormhole.source/source_main.jl")
 
-        position = [0,25,π/3,0]
+        position = [0,5,π/2,0]
         
         direction = [π/2,0]
         
@@ -168,31 +168,31 @@ function initialize_camera(position::Vector; direction=[0.0,0.0], β=0.0::Real, 
     rho_vert=2*H/(vertical_pixels+1)
     
     #initialize blank rays as state vectors (4 position values, 4 velocity values, 2 optical values for each color)
-    ray_state_length=8+2*length(colors)
-    S=zeros(horizontal_pixels,vertical_pixels,ray_state_length)
+    ray_state_length = 8+2*length(colors)
+    S = zeros(horizontal_pixels,vertical_pixels,ray_state_length)
     #now actually fill in proper values into those spots!
     for i = 1:horizontal_pixels
-        w=rho_hor*(i-0.5)-W
+        w = rho_hor*(i-0.5)-W
         for j = 1:vertical_pixels
             for k =1:4
                 S[i,j,k]=position[k]
             end
             
-            h=rho_vert*(j-0.5)-H
-            θ=atan(sqrt(w^2 + h^2))
+            h = rho_vert*(j-0.5)-H
+            θ = atan(sqrt(w^2 + h^2))
 
-            if w>0
-                ϕ =atan(h/w)
-            elseif w<0 && h>=0
-                ϕ=atan(h/w)+ π
+            if w > 0
+                ϕ = atan(h/w)
+            elseif w < 0 && h >= 0
+                ϕ = atan(h/w)+ π
             elseif w<0 && h<0
-                ϕ=atan(h/w)-π
-            elseif w==0 && h>0
-                ϕ=π/2
-            elseif w==0 && h<0
-                ϕ=-π/2
+                ϕ = atan(h/w)-π
+            elseif w == 0 && h > 0
+                ϕ = π/2
+            elseif w == 0 && h < 0
+                ϕ = -π/2
             else
-                ϕ=0
+                ϕ = 0
             end
       
             S[i,j,5]=1
@@ -315,5 +315,32 @@ if runtests
         test_csv[row,"Updated"] = "TRUE"
         save("Test Results/TestResults.csv",test_csv)
         save("Test Results/bh_simple_test_"*mode*".png",img)
+
+    elseif test_mode == "wormhole"
+        position, direction, pointing, β = initialize_world("wormhole")
+        colors=range(350,step=30,stop=750)
+        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,
+                        x_pix=100,speed=β,camera_point = pointing,print_num_pix=true)
+        
+        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,
+                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,print_num_pix=true)
+        
+        test_csv_ref = DataFrame(load("Test Results/TestResults.csv"))
+        test_csv = copy(test_csv_ref)
+        
+        if mode == "LttM"
+            row = 7
+        elseif mode == "5P"
+            row = 8
+        end
+
+        test_csv[row,"Runtime (s)"] = stats.time
+        test_csv[row,"Allocations (bytes)"] = stats.bytes
+        test_csv[row,"GC Time (s)"] = stats.gctime
+        test_csv[row,"Compile Time (s)"] = stats.compile_time
+        test_csv[row,"Recompile Time (s)"] = stats.recompile_time
+        test_csv[row,"Updated"] = "TRUE"
+        save("Test Results/TestResults.csv",test_csv)
+        save("Test Results/wormhole_test_"*mode*".png",img)
     end
 end

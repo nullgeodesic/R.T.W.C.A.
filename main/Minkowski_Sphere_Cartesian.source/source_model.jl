@@ -3,23 +3,18 @@ Author: Levi Malmström
 """
 
 #CONSTANTS
-#emission scale factor (to scale the rays at the end)
-#2h/c^2, but scaled to ν measured in 1/nm instead of Hz
-const emission_scale = 2*h*c*1e27
-#h/k_B in nm/K, instead of the normal s/K, because ν is in units of nm^-1, not Hz
-const ν_factor = h*c*1e9/k_B
 #height of skybox in pixels
 const skybox_pix_height = 512
 #the skybox
-const skybox = load("Minkowski_Sphere_Cartesian.source/Cubemap/Cubemap_Sky_22-512x512.png")
+const skybox = load("Textures/Test_Cubemaps/Cubemap_Sky_22-512x512.png")
 
 
 """
-Planck function (ν in nm^-1).
+Planck function (f in nm^-1).
 """
-@inline function calc_planck(T,ν)
-    B_ν = emission_scale*ν^3/(exp(ν_factor*ν/T)-1)
-    return B_ν
+@inline function calc_planck(T,f)
+    B_f = emission_scale*f^3/(exp(f_factor*f/T)-1)
+    return B_f
 end
 
 """
