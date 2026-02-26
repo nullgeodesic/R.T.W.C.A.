@@ -1,6 +1,4 @@
 """
-v0.4.0
-Jan 1 2025
 Author: Levi Malmström
 """
 
@@ -93,6 +91,7 @@ function find_bad_color(color_array)
     end
 end
 
+
 function plot_rays_spherical_minkowski(ray_matrix)
     x_pix = size(ray_matrix,1)
     y_pix = size(ray_matrix,2)
@@ -120,4 +119,64 @@ function plot_rays_spherical_minkowski(ray_matrix)
     ys=reshape(y_grid,x_pix*y_pix)
     zs=reshape(z_grid,x_pix*y_pix)
     scatter(xs,ys,zs)
+end
+
+
+function cubemap_walker(;N=4)
+    Cube = zeros(Int32,3*N,4*N)
+    player_position = [1,1,2]
+    player_delta = zeros(Int32,2)
+
+    #mark out of bounds with a 9
+    for j in 1:3*N
+        for i in 1:4*N
+            if !(N < j <= 2*N) && !(N < i <= 2*N)
+                Cube[j,i] = 9
+            end
+        end
+    end
+
+    #mark player position with a 1
+    i,j = cubemap_coord_calc(player_position[1],player_position[2],player_position[3],N)
+    Cube[j,i] = 1
+
+    #game loop
+    go = true
+    while go
+        println(player_position)
+        for k in 1:3*N
+            println(Cube[3*N + 1 - k,:])
+        end
+        
+        println("Enter directions or type 'exit' to quit: ")
+        instruction = lowercase(readline())
+        if occursin("exit",instruction)
+            go = false
+        else
+            #WASD
+            if occursin("w",instruction)
+                player_delta[2] += 1
+            end
+            if occursin("a",instruction)
+                player_delta[1] -= 1
+            end
+            if occursin("s",instruction)
+                player_delta[2] -= 1
+            end
+            if occursin("d",instruction)
+                player_delta[1] += 1
+            end
+        end
+        println(player_delta)
+        a,b,c = cube_wrap(player_position[1],player_position[2],player_position[3],
+                          player_delta[1],player_delta[2],N)
+        player_position[1] = a
+        player_position[2] = b
+        player_position[3] = c
+        player_delta[1] = 0
+        player_delta[2] = 0
+        Cube[j,i] = 0
+        i,j = cubemap_coord_calc(player_position[1],player_position[2],player_position[3],N)
+        Cube[j,i] = 1
+    end
 end

@@ -10,7 +10,6 @@ using StaticArrays
 using Base.Threads
 
 include("integrators_5P.jl")
-include("tests_5P.jl")
 
 
 #println(CUDA.versioninfo())
@@ -18,8 +17,8 @@ include("tests_5P.jl")
 """
 Runs the integration loop for a single pixel.
 """
-@inline function integrate_ray!(ray,starting_timestep,colors,colors_freq,::Val{raylength},abs_tol,rel_tol,max_dt_scale,
-                    max_steps) where raylength
+@inline function integrate_ray!(ray,starting_timestep,colors,colors_freq,::Val{raylength},
+                                abs_tol,rel_tol,max_dt_scale,max_steps,n_bundle_param) where raylength
     #integrate ray
     dt = starting_timestep
     
@@ -31,7 +30,7 @@ Runs the integration loop for a single pixel.
     next_slope = @MVector zeros(Float32,raylength)
 
     #calculate initial derivative
-    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g)
+    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g,n_bundle_param)
     @inbounds for i in 1:raylength
         last_slope[i] = shared_slope[i]
         next_slope[i] = shared_slope[i]
@@ -56,7 +55,7 @@ Runs the integration loop for a single pixel.
     while raytrace
         dt,rejected = RKDP_Step_w_buffer!(ray,y,last_slope,next_slope,raylength,dt,colors_freq,
                                                          abs_tol, rel_tol,rejected,max_dt_scale,buffer,
-                                                         k2,k3,k4,k5,k6,k7,source_vel,g)
+                                                         k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param)
         step_count+=1
 
         
@@ -70,7 +69,8 @@ end
 
 
 function ray_kernel!(long_ray_matrix,colors,colors_freq,
-                     ::Val{raylength},abs_tol,rel_tol,max_dt_scale,max_steps,num_pix) where raylength
+                     ::Val{raylength},abs_tol,rel_tol,max_dt_scale,max_steps,
+                     num_pix,n_bundle_param) where raylength
     
     index = (blockIdx().x - 1) * blockDim().x + threadIdx().x    
     stride = gridDim().x * blockDim().x
@@ -84,7 +84,7 @@ function ray_kernel!(long_ray_matrix,colors,colors_freq,
         starting_timestep = -pad_max_dt(ray,max_dt_scale)
         
         integrate_ray!(ray,starting_timestep,colors,colors_freq,Val(raylength),abs_tol,rel_tol,max_dt_scale,
-                            max_steps)
+                            max_steps,n_bundle_param)
         
         
         for j in 1:raylength
@@ -97,10 +97,10 @@ function ray_kernel!(long_ray_matrix,colors,colors_freq,
 end
 
 
-function color_kernel!(ray_bundle,img_bundle,colors,colors_freq,raylength::Integer,beamsize::Real)
+function color_kernel!(ray_bundle,img_bundle,colors,colors_freq,raylength::Integer,n_bundle_param::Integer)
     for i in 1:size(ray_bundle,1)
         @views ray = ray_bundle[i,:]
-        skybox_handling!(ray,raylength,colors,colors_freq,beamsize)
+        skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param)
         #calculate pixel value
         img_bundle[i] = calc_xyY(ray,colors,colors_freq)
     end
@@ -131,7 +131,7 @@ Generates an image. Multithreaded.
 function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
                         camera_point=[0.0,0.0,0.0],x_pix=40,max_steps=1e3,colors=[400,550,700],
                              returnrays=false,tolerance=1e-4::Real,max_dt_scale=1e-2::Real,fov_hor=85::Real,
-                   fov_vert=60::Real,print_num_pix=false::Bool)
+                   fov_vert=60::Real,print_num_pix=false::Bool,ray_bundles=false::Bool)
     #check that camera is in a valid location
     if is_singularity(camera_pos)
         println("Invalid Camera; returning blank image")
@@ -139,16 +139,18 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     end
 
     #initialize rays
-    ray_matrix, beamsize = initialize_camera(camera_pos,direction=camera_dir,β=speed,pointing=camera_point,
-                                   horizontal_pixels=x_pix,colors=colors,fov_hor=fov_hor, fov_vert=fov_vert)
+    ray_matrix = initialize_camera(camera_pos,direction=camera_dir,β=speed,pointing=camera_point,
+                                   horizontal_pixels=x_pix,colors=colors,fov_hor=fov_hor, fov_vert=fov_vert,
+                                   ray_bundles=ray_bundles)
     y_pix=size(ray_matrix,2)
     num_pix=x_pix*y_pix
     if print_num_pix
         println("Number of Pixels ",num_pix)
     end
 
-    n_colors=length(colors)
-    raylength = 8+2*n_colors
+    n_bundle_param = 11*ray_bundles
+    n_colors = length(colors)
+    raylength = 8 + 2*n_colors + n_bundle_param
     long_ray_matrix = reshape(ray_matrix,(num_pix,raylength))
     ray_matrix_shape = size(ray_matrix)
     
@@ -178,13 +180,13 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     """
     @device_code_llvm raw=true dump_module=true @cuda ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
                                                    Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
-                                                   Int32(max_steps),Int32(num_pix))
+                                                   Int32(max_steps),Int32(num_pix),n_bundle_param)
     """
     
     #compile the kernel and make the configuration
     Cu_ray_kernel! = @cuda launch=false ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
                                                    Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
-                                                   Int32(max_steps),Int32(num_pix))
+                                                   Int32(max_steps),Int32(num_pix),n_bundle_param)
     config = launch_configuration(Cu_ray_kernel!.fun)
     threads = min(num_pix,config.threads)
     blocks = cld(num_pix,threads)
@@ -197,7 +199,8 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     CUDA.@sync begin
         Cu_ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
                                                    Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
-                                                   Int32(max_steps),Int32(num_pix); threads, blocks)
+                       Int32(max_steps),Int32(num_pix),n_bundle_param;
+                       threads, blocks)
     end
     
     #Bring back the integrated rays to the host
@@ -208,7 +211,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     tasks = []
     tasks = map(chunks) do chunk
         @spawn color_kernel!(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
-                            deepcopy(colors),deepcopy(colors_freq),raylength,beamsize)
+                            deepcopy(colors),deepcopy(colors_freq),raylength,n_bundle_param)
     end
     finished_bundles = fetch.(tasks)
     index_counter = 1

@@ -136,7 +136,7 @@ function initialize_world(input_string::String)
     return position,direction,pointing,β
 end
 
-        
+
 """
     initialize_camera(position;direction=[0.0,0.0],β=0.0::Real,pointing=[0.0,0.0,0.0],
        xpixels=1024::Integer,fov_hor=85::Real,fov_vert=60::Real,colors=[400,550,700])
@@ -154,39 +154,43 @@ the tetrad/FIDO. The first coordinate has range [0,π], the second has range [0,
 """
 function initialize_camera(position::Vector; direction=[0.0,0.0], β=0.0::Real, pointing=[0.0,0.0,0.0],
                            horizontal_pixels=1024::Integer, fov_hor=85::Real, fov_vert=60::Real,
-                           colors=[400,550,700])
+                           colors=[400,550,700],ray_bundles=false::Bool)
     #convert to radians
-    fov_hor=π*fov_hor/180
-    fov_vert=π*fov_vert/180
+    fov_hor = π*fov_hor/180
+    fov_vert = π*fov_vert/180
     #calculate canvas size
-    W=tan(fov_hor/2)
-    H=tan(fov_vert/2)
+    W = tan(fov_hor/2)
+    H = tan(fov_vert/2)
     #calculate number of vertical pixels
-    vertical_pixels=round(Int,horizontal_pixels*H/W)
-    #calculate pixel density
-    rho_hor=2*W/(horizontal_pixels+1)
-    rho_vert=2*H/(vertical_pixels+1)
+    vertical_pixels = round(Int,horizontal_pixels*H/W)
+    #calculate inverse pixel density
+    ρ_hor = 2*W/(horizontal_pixels+1)
+    ρ_vert = 2*H/(vertical_pixels+1)
+    #calculate the approximate angular size of the central pixels, then divide by 2 to get radius,
+    #then divide by 2 again to keep most of the gaussian inside the pixel:
+    beamscale = atan(ρ_hor)/2
     
-    #initialize blank rays as state vectors (4 position values, 4 velocity values, 2 optical values for each color)
-    ray_state_length = 8+2*length(colors)
-    S = zeros(horizontal_pixels,vertical_pixels,ray_state_length)
+    #initialize blank rays as state vectors (4 position values, 4 velocity values, 2 optical values for each color
+    #and optionally 5 bundle parameters, their derivatives, and the size of the bundle)
+    raylength = 8 + 2*length(colors) + 11*ray_bundles
+    S = zeros(horizontal_pixels,vertical_pixels,raylength)
     #now actually fill in proper values into those spots!
     for i = 1:horizontal_pixels
-        w = rho_hor*(i-0.5)-W
+        w = ρ_hor*(i-0.5)-W
         for j = 1:vertical_pixels
             for k =1:4
-                S[i,j,k]=position[k]
+                S[i,j,k] = position[k]
             end
             
-            h = rho_vert*(j-0.5)-H
+            h = ρ_vert*(j-0.5) - H
             θ = atan(sqrt(w^2 + h^2))
 
             if w > 0
                 ϕ = atan(h/w)
             elseif w < 0 && h >= 0
-                ϕ = atan(h/w)+ π
-            elseif w<0 && h<0
-                ϕ = atan(h/w)-π
+                ϕ = atan(h/w) + π
+            elseif w < 0 && h < 0
+                ϕ = atan(h/w) - π
             elseif w == 0 && h > 0
                 ϕ = π/2
             elseif w == 0 && h < 0
@@ -195,39 +199,110 @@ function initialize_camera(position::Vector; direction=[0.0,0.0], β=0.0::Real, 
                 ϕ = 0
             end
       
-            S[i,j,5]=1
-            S[i,j,6]=-sin(θ)*cos(ϕ)
-            S[i,j,7]=-sin(θ)*sin(ϕ)
-            S[i,j,8]=-cos(θ)
+            S[i,j,5] = 1
+            S[i,j,6] = -sin(θ)*cos(ϕ)
+            S[i,j,7] = -sin(θ)*sin(ϕ)
+            S[i,j,8] = -cos(θ)
             #geometrically, we have projected the pixels from the canvas at z=1 onto a sphere
             #but the points actually are velocity vectors, so we need to negate them,
             #since the rays are traveling into the camera, not out.
+
+            #calculate size of this bundles's major axis:
+            if ray_bundles
+                #δ_cs = |beamscale*cos(θ)|
+                S[i,j,raylength] = abs(beamscale*S[i,j,8])
+            end
         end
     end
 
-    #Matrix to rotate the camera
-    R=gen_intrinsic_rotation_matrix(pointing)
+    #Matrix to rotate the camera relative to the direction of motion
+    R = gen_intrinsic_rotation_matrix(pointing)
     #Matrix to boost to the FIDO frame
-    L=lorentz_boost_z(-β)
+    L = lorentz_boost_z(-β)
     #Matrix to rotate coordinate axes to align with FIDO frame
-    R2=gen_final_rotation_matrix(direction)
+    R2 = gen_final_rotation_matrix(direction)
     #Matrix to convert to global coordinates
-    e=calc_inv_vierbein(position)
+    e = calc_inv_vierbein(position)
     for i = 1:horizontal_pixels
         for j = 1:vertical_pixels
-            S[i,j,5:8]=e*R2*L*R*S[i,j,5:8]
+            if ray_bundles
+                #figure out ray bundle shape:
+                #d is the negative of the direction of the camera is pointing
+                d = [0.0,0.0,-1.0]
+                #n is the direction of the ray
+                n = S[i,j,6:8]
+                #E = sec(θ)
+                E = inv(abs(n[3]) + no_div_zero)
+                #J is the direction of the major axis of the ray bundle
+                J = cross(n,d)
+                if dot(J,J) < 1e-3
+                    J = [0.0,-1.0,0.0]
+                end
+                #rotate and boost to FIDO frame (w/o full conversion to global coord)
+                J = R2[2:4,2:4]*L[2:4,2:4]*R[2:4,2:4]*J
+                n = R2[2:4,2:4]*L[2:4,2:4]*R[2:4,2:4]*n
+                #normalize
+                J = J/sqrt(dot(J,J))
+                n = n/sqrt(dot(n,n))
+                
+                #create basis vectors for the bundle shape
+                if !(abs(1 - n[1]) < 1e-3)
+                    a = [n[2],1 - n[2]^2/(1-n[1]),-n[2]*n[3]/(1-n[1])]
+                    b = [n[3],-n[2]*n[3]/(1-n[1]),1 - n[3]^2/(1-n[1])]
+                else
+                    #snap to basis for n[1] close to +1
+                    a = [0.0,-1.0,0.0]
+                    b = [0.0,0.0,-1.0]
+                end
+                #calculate bundle shape parameters
+                """
+                for k in 1:3
+                    if isnan(a[k])
+                        println("NaN! a")
+                    end
+                    if isnan(b[k])
+                        println("NaN! b")
+                    end
+                end
+                """
+                #u = 0
+                S[i,j,raylength - 10] = 0
+                #v = 0
+                S[i,j,raylength - 9] = 0
+                #g = 0
+                S[i,j,raylength - 8] = 0
+                #h = 0
+                S[i,j,raylength - 7] = 0
+                #χ = 0
+                S[i,j,raylength - 6] = 0
+                #du/dλ
+                S[i,j,raylength - 5] = dot(a,J)*(1 + E)/2
+                #dv/dλ
+                S[i,j,raylength - 4] = dot(b,J)*(1 + E)/2
+                #dg/dλ
+                S[i,j,raylength - 3] = dot(a,J)*(1 - E)/2
+                #dh/dλ
+                S[i,j,raylength - 2] = dot(b,J)*(1 - E)/2
+                #dχ/dλ
+                S[i,j,raylength - 1] = 0
+            end
+            #transform the ray to global coordinate system
+            S[i,j,5:8] = e*R2*L*R*S[i,j,5:8]
         end
     end
-
-    #calculate the angular size of a pixel
-    beamsize = fov_hor/horizontal_pixels    
-    return S,beamsize
+    return S
 end
 
 
-runtests = true
-#comment out next line to run tests
-#runtests = false
+#decide whether to run tests
+print("Type 'yes' if you want to run an automated test: ")
+to_test = lowercase(readline())
+if to_test == "yes"
+    runtests = true
+else
+    runtests = false
+end
+
 if runtests
     print("Type the test you would like to perform (e.g. 'bh_simple'): ")
     test_mode = lowercase(readline())

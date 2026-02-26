@@ -31,7 +31,7 @@ end
 Gives the temperature at a position in Kelvin.
 """
 @inline function get_temp(ray)
-    if ray[2] >0
+    if ray[2] > 0
         return 5778
     else
         return 4000
@@ -133,12 +133,11 @@ Whether to stop integrating the ray.
             end
         end
     end
-
     return terminate
 end
 
 
-function skybox_I_ν_calc(i::Int,j::Int,f::Real,beamsize::Real,skybox_num::Int)
+function skybox_I_ν_calc(i::Integer,j::Integer,f::Real,skybox_num::Integer)
     #Note: pretending sRGB/Rec. 709 is the same as Rec. 2020 for this crude RGB to spectrum scheme
     #Also, j is flipped in the skybox1 to j_new =  3*skybox1_pix_height + 1 - j
     if skybox_num == 1
@@ -162,224 +161,262 @@ function skybox_I_ν_calc(i::Int,j::Int,f::Real,beamsize::Real,skybox_num::Int)
 end
 
 
-function skybox_handling!(ray,raylength,colors,colors_freq,beamsize)
+function calc_skybox_coord(position4,velocity4,skybox_pix_height::Int)
+    #transform to flat cartesian coordinates
+    e = calc_vierbein(position4)
+    R = R_sph_to_cart(position4)
+    v = R*e*velocity4
+
+    #start by getting a normalized version of the 3 velocity (could get by dividing by γ, but this way
+    #should be robust against floating point errors)
+    v3 = v[2:4]/sqrt(v[2]^2 + v[3]^2 + v[4]^2)
+
+    x = v3[1]
+    y = v3[2]
+    z = v3[3]
+    #figure out which face of the skybox the ray is going to hit
+    if abs(x) >= abs(y) && abs(x) >= abs(z)
+        if x > 0
+            face = 1
+        else
+            face = 3
+        end
+    elseif abs(y) >= abs(x) && abs(y) >= abs(z)
+        if y > 0
+            face = 4
+        else
+            face = 2
+        end
+    else
+        if z > 0
+            face = 6
+        else
+            face = 5
+        end
+    end
+
+    #project ray onto skybox
+    if face == 1
+        #w = -y
+        #h = z
+        #maj = abs(x)
+        #u = w/maj
+        #v = h/maj
+        u = -y/abs(x)
+        v = z/abs(x)
+    elseif face == 2
+        #w = -x
+        #h = z
+        #maj = abs(y)
+        #u = w/maj
+        #v = h/maj
+        u = -x/abs(y)
+        v = z/abs(y)
+    elseif face == 3
+        #w = y
+        #h = z
+        #maj = abs(x)
+        u = y/abs(x)
+        v = z/abs(x)
+    elseif face == 4
+        #w = x
+        #h = z
+        #maj = abs(y)
+        u = x/abs(y)
+        v = z/abs(y)
+    elseif face == 5
+        #w = -x
+        #h = -y
+        #maj = abs(z)
+        u = -x/abs(z)
+        v = -y/abs(z)
+    elseif face == 6
+        #w = -x
+        #h = y
+        #maj = abs(z)
+        u = -x/abs(z)
+        v = y/abs(z)
+    end
+
+    #convert from uv into ij (pixels)
+    i = min(floor(Int64,skybox_pix_height*(u + 1)/2) + 1,skybox_pix_height)
+    j = min(floor(Int64,skybox_pix_height*(v + 1)/2) + 1,skybox_pix_height)
+    #note: i,j are local to the face
+    """
+    if face == 1
+        j += skybox_pix_height
+    elseif face == 2
+        i += skybox_pix_height
+        j += skybox_pix_height
+    elseif face == 3
+        i += 2*skybox_pix_height
+        j += skybox_pix_height
+    elseif face == 4
+        i += 3*skybox_pix_height
+        j += skybox_pix_height
+    elseif face == 5
+        i += skybox_pix_height
+    else
+        i += skybox_pix_height
+        j += 2*skybox_pix_height
+    end
+    """
+    return i,j,u,v,face
+end
+
+
+function calc_skybox_face(i::Integer,j::Integer,skybox_pix_height::Integer)
+    if 1 <= i <= 2*skybox_pix_height
+        if 1 <= i <= skybox_pix_height
+            if skybox_pix_height < j <= 2*skybox_pix_height
+                face = 1
+            else
+                face = 0
+            end
+        elseif skybox_pix_height < i <= 2*skybox_pix_height
+            if 1 <= j <= skybox_pix_height
+                face = 5
+            elseif skybox_pix_height < j <= 2*skybox_pix_height
+                face = 2
+            else
+                face = 6
+            end
+        else
+            face = 0
+        end
+    elseif 2*skybox_pix_height < i <= 3*skybox_pix_height && skybox_pix_height < j <= 2*skybox_pix_height
+        face = 3
+    elseif 3*skybox_pix_height < i <= 4*skybox_pix_height && skybox_pix_height < j <= 2*skybox_pix_height
+        face = 4
+    else
+        face = 0
+    end
+    return face
+end
+
+
+
+function calc_skybox_I_ν_beam!(ray,freq_shift::Real,i::Integer,j::Integer,u::Real,v::Real,face::Integer,
+                               raylength::Integer,skybox_pix_height::Integer, skybox_num::Integer, colors_freq)
+    #calculate the ray beam shape
+    
+    δ_prime = ray[raylength]*freq_shift
+    
+    δ_major = δ_prime*(sqrt(ray[raylength-5]^2 + ray[raylength-4]^2)
+                       + sqrt(ray[raylength-3]^2 + ray[raylength-2]^2))
+    δ_minor = δ_prime*(sqrt(ray[raylength-5]^2 + ray[raylength-4]^2)
+                       - sqrt(ray[raylength-3]^2 + ray[raylength-2]^2))
+    μ = ray[raylength-6] + angle(complex(ray[raylength-5],ray[raylength-4])*
+        complex(ray[raylength-3],ray[raylength-2]))/2
+    """
+    #δ_prime = π/200
+    
+    δ_major = δ_prime
+    δ_minor = δ_prime
+    μ = 0.0
+    """
+
+    #approximate angular size of center-face skybox pixels
+    sky_beamscale = atan(2/(skybox_pix_height + 1))
+    #skybox distortions
+    θ = atan(sqrt(u^2 + v^2))
+    if u > 0
+        ϕ = atan(v/u)
+    elseif u < 0 && v >= 0
+        ϕ = atan(v/u) + π
+    elseif u < 0 && v < 0
+        ϕ = atan(v/u) - π
+    elseif u == 0 && v > 0
+        ϕ = π/2
+    elseif u == 0 && v < 0
+        ϕ = -π/2
+    else
+        ϕ = 0
+    end
+    Δθ_r = sky_beamscale*cos(θ)^2
+    Δθ_t = abs(sky_beamscale*cos(θ))
+    #Δθ_x and Δθ_y the angular size of pixels in the x and y direction near the central pixel
+    Δθ_x = Δθ_r*abs(cos(ϕ)) + Δθ_t*abs(sin(ϕ))
+    Δθ_y = Δθ_r*abs(sin(ϕ)) + Δθ_t*abs(cos(ϕ))
+    #figure out beam shape in terms of pixels
+    σ_x_new,σ_y_new,μ_new = distort_gauss(δ_major/(δ_minor + no_div_zero),1,μ,δ_prime/(Δθ_x + no_div_zero),
+                                          δ_prime/(Δθ_y + no_div_zero))
+
+    """
+    if isnan(μ_new) || isnan(σ_x_new) || isnan(σ_y_new)
+        println("#",δ_prime," ",δ_major," ",δ_minor," ",μ," ",ray[raylength-5]," ",ray[raylength-4],"E")
+    end
+    """
+    #figure out how far out to collect pixels
+    h = min(ceil(Int,max(σ_x_new*abs(cos(μ_new)),σ_y_new*abs(sin(μ_new)))),10)
+    w = min(ceil(Int,max(σ_x_new*abs(sin(μ_new)),σ_y_new*abs(cos(μ_new)))),10)
+    
+    #collect weighted spatial average I_ν for each frequency over 4*h*w pixels
+    I_ν = zeros(length(colors_freq))
+    for k in -h:h
+        for l in -w:w
+            #i,j,face for the pixel
+            i_wrapped,j_wrapped,face_wrapped = cube_wrap(i,j,face,k,l,skybox_pix_height)
+            #absolute cube map coordinates
+            i_abs,j_abs = cubemap_coord_calc(i_wrapped,j_wrapped,face_wrapped,skybox_pix_height)
+            for m in 9:2:(raylength - 11)
+                f = colors_freq[ceil(Int,(m-8)/2)]*freq_shift
+                I_ν[ceil(Int,(m-8)/2)] += D2_Gauss(k,l,σ_x = σ_x_new,σ_y = σ_y_new,θ = μ_new)*
+                    skybox_I_ν_calc(i_abs,j_abs,f,skybox_num)*exp(-ray[m+1])/f^3
+            end
+        end
+    end
+
+    for a in 9:2:(raylength - 11)
+        ray[a] = I_ν[ceil(Int,(a-8)/2)]
+    end
+
+    return nothing
+end
+
+
+function skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param)
     if r_of_l(ray[2]) > 50 && ray[2] > 0
         skybox_num = 1
         position4 = ray[1:4]
         velocity4 = ray[5:8]
         g = calc_lower_metric(position4)
         freq_shift = -transpose([1,0,0,0])*g*velocity4
-        #transform to flat cartesian coordinates
-        e = calc_vierbein(position4)
-        R = R_sph_to_cart(position4)
-        v = R*e*velocity4
-        
-        #start by getting a normalized version of the 3 velocity (could get by dividing by γ, but this way
-        #should be robust against floating point errors)
-        v3 = v[2:4]/sqrt(v[2]^2 + v[3]^2 + v[4]^2)
-
-        x = v3[1]
-        y = v3[2]
-        z = v3[3]
-        #figure out which face of the skybox the ray is going to hit
-        if abs(x) >= abs(y) && abs(x) >= abs(z)
-            if x > 0
-                face = 1
-            else
-                face = 3
-            end
-        elseif abs(y) >= abs(x) && abs(y) >= abs(z)
-            if y > 0
-                face = 4
-            else
-                face = 2
+        #figure out where on the skybox the ray is
+        i,j,u,v,face = calc_skybox_coord(position4,velocity4,skybox1_pix_height)
+        #add skybox pixels to the ray
+        #use simple vs. bundle rays
+        if n_bundle_param == 0
+            #absolute cube map coordinates
+            i_abs,j_abs = cubemap_coord_calc(i,j,face,skybox1_pix_height)
+            for k in 9:2:raylength
+                f = colors_freq[ceil(Int,(k-8)/2)]*freq_shift
+                ray[k] += skybox_I_ν_calc(i_abs,j_abs,f,skybox_num)*exp(-ray[k+1])/f^3
             end
         else
-            if z > 0
-                face = 6
-            else
-                face = 5
-            end
-        end
-
-        #project ray onto skybox
-        if face == 1
-            #w = -y
-            #h = z
-            #maj = abs(x)
-            #u = w/maj
-            #v = h/maj
-            u = -y/abs(x)
-            v = z/abs(x)
-        elseif face == 2
-            #w = -x
-            #h = z
-            #maj = abs(y)
-            #u = w/maj
-            #v = h/maj
-            u = -x/abs(y)
-            v = z/abs(y)
-        elseif face == 3
-            #w = y
-            #h = z
-            #maj = abs(x)
-            u = y/abs(x)
-            v = z/abs(x)
-        elseif face == 4
-            #w = x
-            #h = z
-            #maj = abs(y)
-            u = x/abs(y)
-            v = z/abs(y)
-        elseif face == 5
-            #w = -x
-            #h = -y
-            #maj = abs(z)
-            u = -x/abs(z)
-            v = -y/abs(z)
-        elseif face == 6
-            #w = -x
-            #h = y
-            #maj = abs(z)
-            u = -x/abs(z)
-            v = y/abs(z)
-        end
-
-        #convert from uv into ij (pixels)
-        i = min(floor(Int64,skybox1_pix_height*(u + 1)/2) + 1,skybox1_pix_height)
-        j = min(floor(Int64,skybox1_pix_height*(v + 1)/2) + 1,skybox1_pix_height)
-        #shift to correct face
-        if face == 1
-            j += skybox1_pix_height
-        elseif face == 2
-            i += skybox1_pix_height
-            j += skybox1_pix_height
-        elseif face == 3
-            i += 2*skybox1_pix_height
-            j += skybox1_pix_height
-        elseif face == 4
-            i += 3*skybox1_pix_height
-            j += skybox1_pix_height
-        elseif face == 5
-            i += skybox1_pix_height
-        else
-            i += skybox1_pix_height
-            j += 2*skybox1_pix_height
+            calc_skybox_I_ν_beam!(ray,freq_shift,i,j,u,v,face,
+                                  raylength,skybox1_pix_height,skybox_num,colors_freq)
         end
             
-        for k in 9:2:raylength
-            f = colors_freq[ceil(Int,(k-8)/2)]*freq_shift
-            ray[k] += skybox_I_ν_calc(i,j,f,beamsize,skybox_num)*exp(-ray[k+1])/f^3
-        end
-
-
     elseif r_of_l(ray[2]) > 50 && ray[2] < 0
         skybox_num = 2
         position4 = ray[1:4]
         velocity4 = ray[5:8]
         g = calc_lower_metric(position4)
         freq_shift = -transpose([1,0,0,0])*g*velocity4
-        #transform to flat cartesian coordinates
-        e = calc_vierbein(position4)
-        R = R_sph_to_cart(position4)
-        v = R*e*velocity4
-        
-        #start by getting a normalized version of the 3 velocity (could get by dividing by γ, but this way
-        #should be robust against floating point errors)
-        v3 = v[2:4]/sqrt(v[2]^2 + v[3]^2 + v[4]^2)
-
-        x = v3[1]
-        y = v3[2]
-        z = v3[3]
-        #figure out which face of the skybox the ray is going to hit
-        if abs(x) >= abs(y) && abs(x) >= abs(z)
-            if x > 0
-                face = 1
-            else
-                face = 3
-            end
-        elseif abs(y) >= abs(x) && abs(y) >= abs(z)
-            if y > 0
-                face = 4
-            else
-                face = 2
+        #figure out where on the skybox the ray is
+        i,j,u,v,face = calc_skybox_coord(position4,velocity4,skybox2_pix_height)
+        #add skybox pixels to the ray
+        if n_bundle_param == 0
+            #absolute cube map coordinates
+            i_abs,j_abs = cubemap_coord_calc(i,j,face,skybox2_pix_height)
+            for k in 9:2:raylength
+                f = colors_freq[ceil(Int,(k-8)/2)]*freq_shift
+                ray[k] += skybox_I_ν_calc(i_abs,j_abs,f,skybox_num)*exp(-ray[k+1])/f^3
             end
         else
-            if z > 0
-                face = 6
-            else
-                face = 5
-            end
-        end
-
-        #project ray onto skybox
-        if face == 1
-            #w = -y
-            #h = z
-            #maj = abs(x)
-            #u = w/maj
-            #v = h/maj
-            u = -y/abs(x)
-            v = z/abs(x)
-        elseif face == 2
-            #w = -x
-            #h = z
-            #maj = abs(y)
-            #u = w/maj
-            #v = h/maj
-            u = -x/abs(y)
-            v = z/abs(y)
-        elseif face == 3
-            #w = y
-            #h = z
-            #maj = abs(x)
-            u = y/abs(x)
-            v = z/abs(x)
-        elseif face == 4
-            #w = x
-            #h = z
-            #maj = abs(y)
-            u = x/abs(y)
-            v = z/abs(y)
-        elseif face == 5
-            #w = -x
-            #h = -y
-            #maj = abs(z)
-            u = -x/abs(z)
-            v = -y/abs(z)
-        elseif face == 6
-            #w = -x
-            #h = y
-            #maj = abs(z)
-            u = -x/abs(z)
-            v = y/abs(z)
-        end
-
-        #convert from uv into ij (pixels)
-        i = min(floor(Int64,skybox2_pix_height*(u + 1)/2) + 1,skybox2_pix_height)
-        j = min(floor(Int64,skybox2_pix_height*(v + 1)/2) + 1,skybox2_pix_height)
-        #shift to correct face
-        if face == 1
-            j += skybox2_pix_height
-        elseif face == 2
-            i += skybox2_pix_height
-            j += skybox2_pix_height
-        elseif face == 3
-            i += 2*skybox2_pix_height
-            j += skybox2_pix_height
-        elseif face == 4
-            i += 3*skybox2_pix_height
-            j += skybox2_pix_height
-        elseif face == 5
-            i += skybox2_pix_height
-        else
-            i += skybox2_pix_height
-            j += 2*skybox2_pix_height
-        end
-            
-        for k in 9:2:raylength
-            f = colors_freq[ceil(Int,(k-8)/2)]*freq_shift
-            ray[k] += skybox_I_ν_calc(i,j,f,beamsize,skybox_num)*exp(-ray[k+1])/f^3
+            calc_skybox_I_ν_beam!(ray,freq_shift,i,j,u,v,face,
+                                  raylength,skybox2_pix_height,skybox_num,colors_freq)
         end
     end
     return nothing

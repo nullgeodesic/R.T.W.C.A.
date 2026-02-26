@@ -6,7 +6,7 @@ Author: Levi Malmström
 """
 Calculates the derivative of the ray with respect to affine parameter (mutating).
 """
-@inline function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel,g)
+@inline function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel,g,n_bundle_param)
     #calculate derivative at a point
     for i in 1:4
         #dx/dl=v
@@ -38,7 +38,7 @@ Calculates the derivative of the ray with respect to affine parameter (mutating)
         end
         freq_shift -= source_vel[j] * part_sum
     end
-    for i in 9:raylength
+    for i in 9:(raylength - n_bundle_param)
         if isodd(i)
             nu=colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and
@@ -61,7 +61,7 @@ Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
 @inline function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
                              stepsize::Real,colors_freq, abs_tol,rel_tol,prev_rejected::Bool, max_dt_scale::Real,
                              buffer,k2,k3,k4,k5,k6,
-                             k7,source_vel,g)
+                             k7,source_vel,g,n_bundle_param::Integer)
     k1 = last_slope
     max_dt = pad_max_dt(Ray, max_dt_scale)
 
@@ -82,7 +82,7 @@ Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
         """
         for i in 1:8
             if !calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
-                calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g)
+                calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param)
                 #Ray -= temp_stepsize*k1
                 for j in 1:raylength
                     Ray[j] -= temp_stepsize*k1[j]
@@ -104,58 +104,44 @@ Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
             return stepsize,false
         end
         #then hand the ray back to the normal Runge-Kutta integrator
-        calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g)
+        calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param)
 
         @views stepsize = -pad_max_dt(Ray, max_dt_scale)
     end
 
-    #'buffer' is used to cut out the memory allocations on array math
-    #Calculating k's
-    #@views k2 = calc_ray_derivative(Ray .+ k1*stepsize .* DP_Butcher[2,2], raylength,colors_freq)
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*k1[i]*DP_Butcher[2,2]
     end
-    #k2 = calc_ray_derivative(buffer,raylength,colors_freq)
-    calc_ray_derivative!(buffer,raylength,colors_freq,k2,source_vel,g)
+    #k2
+    calc_ray_derivative!(buffer,raylength,colors_freq,k2,source_vel,g,n_bundle_param)
 
-    #@views k3 = calc_ray_derivative(Ray .+ stepsize .* (k1 .* DP_Butcher[3,2] .+ k2 .* DP_Butcher[3,3]),
-    #raylength,colors_freq)
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[3,2] + k2[i]*DP_Butcher[3,3])
     end
-    #k3 = calc_ray_derivative(buffer,raylength,colors_freq)
-    calc_ray_derivative!(buffer,raylength,colors_freq,k3,source_vel,g)
+    #k3 
+    calc_ray_derivative!(buffer,raylength,colors_freq,k3,source_vel,g,n_bundle_param)
 
-    #@views k4 = calc_ray_derivative(Ray .+ stepsize .* (
-    #k1 .* DP_Butcher[4,2] + k2 .* DP_Butcher[4,3] + k3 .*DP_Butcher[4,4]),raylength,colors_freq)
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[4,2] + k2[i]*DP_Butcher[4,3] + k3[i]*DP_Butcher[4,4])
     end
-    #k4 = calc_ray_derivative(buffer,raylength,colors_freq)
-    calc_ray_derivative!(buffer,raylength,colors_freq,k4,source_vel,g)
+    #k4
+    calc_ray_derivative!(buffer,raylength,colors_freq,k4,source_vel,g,n_bundle_param)
     
-    #@views k5 = @turbo calc_ray_derivative(Ray .+ stepsize .* (
-    #k1 .* DP_Butcher[5,2] .+ k2 .* DP_Butcher[5,3] .+ k3 .* DP_Butcher[5,4] .+ k4 .* DP_Butcher[5,5]),
-    #raylength, colors_freq)
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[5,2] + k2[i]*DP_Butcher[5,3] + k3[i]*DP_Butcher[5,4] +
             k4[i]*DP_Butcher[5,5])
     end
-    #k5 = calc_ray_derivative(buffer,raylength,colors_freq)
-    calc_ray_derivative!(buffer,raylength,colors_freq,k5,source_vel,g)
+    #k5
+    calc_ray_derivative!(buffer,raylength,colors_freq,k5,source_vel,g,n_bundle_param)
 
-    #@views k6 = calc_ray_derivative(Ray .+ stepsize .*(k1 .* DP_Butcher[6,2] .+ k2 .* DP_Butcher[6,3] +
-    #k3.* DP_Butcher[6,4] .+ k4 .* DP_Butcher[6,5] .+ k5 .* DP_Butcher[6,6]),raylength, colors_freq)
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[6,2] + k2[i]*DP_Butcher[6,3] + k3[i]*DP_Butcher[6,4] +
             k4[i]*DP_Butcher[6,5] + k5[i]*DP_Butcher[6,6])
     end
-    #k6 = calc_ray_derivative(buffer,raylength,colors_freq)
-    calc_ray_derivative!(buffer,raylength,colors_freq,k6,source_vel,g)
+    #k6
+    calc_ray_derivative!(buffer,raylength,colors_freq,k6,source_vel,g,n_bundle_param)
 
-    #@views next_slope=k1 .* DP_Butcher[7,2] .+
-    #k3 .* DP_Butcher[7,4] .+ k4 .* DP_Butcher[7,5] .+ k5 .* DP_Butcher[7,6] .+
-    #k6 .* DP_Butcher[7,7]
+    #k6
     for i in 1:raylength
         buffer[i] = k1[i]*DP_Butcher[7,2] + k3[i]*DP_Butcher[7,4] + k4[i]*DP_Butcher[7,5] + k5[i]*DP_Butcher[7,6] +
             k6[i]*DP_Butcher[7,7]
@@ -166,12 +152,12 @@ Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
     end
     
     
-    #k7 = calc_ray_derivative(Ray .+ stepsize .* next_slope,raylength, colors_freq)
+    #k7
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*next_slope[i]
     end
-    #k7 = calc_ray_derivative(buffer,raylength,colors_freq)
-    calc_ray_derivative!(buffer,raylength,colors_freq,k7,source_vel,g)
+    #k7
+    calc_ray_derivative!(buffer,raylength,colors_freq,k7,source_vel,g,n_bundle_param)
     
     #Calculating y's
     #y = Ray .+ stepsize .* next_slope

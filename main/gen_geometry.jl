@@ -78,7 +78,7 @@ function gen_final_rotation_matrix(direction=[0,0])
         #compensate for unintended roll induced by the transformation
         R = R*gen_intrinsic_rotation_matrix([0,0,π/2 + direction[2]])
     else
-        println("Final Rotation: Camera velocity already aligned with FIDO z-axis; returning identity matrix")
+        #println("Final Rotation: Camera velocity already aligned with FIDO z-axis; returning identity matrix")
         R = Matrix{Float64}(I,4,4)
     end
     return R
@@ -102,8 +102,8 @@ end
 
 
 """
-Returns a matrix that transforms a four vector based at the origin from spherical coordinates
-to cartesian coordinates.
+Returns a matrix that transforms a four vector based at 'position' from spherical coordinates
+to cartesian coordinates; (t,r,θ,ϕ) -> (t,x,y,z).
 """
 function R_sph_to_cart(position)
     R = zeros(4,4)
@@ -117,4 +117,252 @@ function R_sph_to_cart(position)
     R[4,2] = cos(position[3])
     R[4,3] = -sin(position[3])
     return R
+end
+
+
+"""
+Keeping cubemap coordinates on the cube map.
+"""
+function cube_wrap(i1::Integer,j1::Integer,F1::Integer,x::Integer,y::Integer,N::Integer)
+    i2 = i1
+    j2 = j1
+    F2 = F1
+    if !(x != 0 && y != 0)
+        if F1 == 1
+            if x != 0
+                if i1 + x > N
+                    i2 = mod1(i1 + x,N)
+                    j2 = j1
+                    F2 = 2
+                elseif i1 + x < 1
+                    i2 = mod1(i1 + x,N)
+                    j2 = j1
+                    F2 = 4
+                else
+                    i2 = i1 + x
+                    j2 = j1
+                    F2 = 1
+                end
+            else
+                if j1 + y > N
+                    i2 = mod1(j1 + y,N)
+                    j2 = N + 1 - i1
+                    F2 = 6
+                elseif j1 + y < 1
+                    i2 = 1 - j1 - y
+                    j2 = i1
+                    F2 = 5
+                else
+                    i2 = i1
+                    j2 = j1 + y
+                    F2 = 1
+                end
+            end
+        elseif F1 == 2
+            if x != 0
+                if i1 + x > N
+                    i2 = mod1(i1 + x,N)
+                    j2 = j1
+                    F2 = 3
+                elseif i1 + x < 1
+                    i2 = mod1(i1 + x,N)
+                    j2 = j1
+                    F2 = 1
+                else
+                    i2 = i1 + x
+                    j2 = j1
+                    F2 = 2
+                end
+            else
+                if j1 + y > N
+                    i2 = i1
+                    j2 = mod1(j1 + y,N)
+                    F2 = 6
+                elseif j1 + y < 1
+                    i2 = i1
+                    j2 = mod1(j1 + y, N)
+                    F2 = 5
+                else
+                    i2 = i1
+                    j2 = j1 + y
+                    F2 = 2
+                end
+            end
+        elseif F1 == 3
+            if x != 0
+                if i1 + x > N
+                    i2 = mod1(i1 + x,N)
+                    j2 = j1
+                    F2 = 4
+                elseif i1 + x < 1
+                    i2 = mod1(i1 + x,N)
+                    j2 = j1
+                    F2 = 2
+                else
+                    i2 = i1 + x
+                    j2 = j1
+                    F2 = 3
+                end
+            else
+                if j1 + y > N
+                    i2 = N - mod1(j1 + y,N) + 1
+                    j2 = i1
+                    F2 = 6
+                elseif j1 + y < 1
+                    i2 = N + j1 + y
+                    j2 = N - i1 + 1
+                    F2 = 5
+                else
+                    i2 = i1
+                    j2 = j1 + y
+                    F2 = 3
+                end
+            end
+        elseif F1 == 4
+            if x != 0
+                if i1 + x > N
+                    i2 = mod1(i1 + x,N)
+                    j2 = j1
+                    F2 = 1
+                elseif i1 + x < 1
+                    i2 = mod1(i1 + x,N)
+                    j2 = j1
+                    F2 = 3
+                else
+                    i2 = i1 + x
+                    j2 = j1
+                    F2 = 4
+                end
+            else
+                if j1 + y > N
+                    i2 = N - i1 + 1
+                    j2 = N - mod1(j1 + y,N) + 1
+                    F2 = 6
+                elseif j1 + y < 1
+                    i2 = N - i1 + 1
+                    j2 = 1 - j1 - y
+                    F2 = 5
+                else
+                    i2 = i1
+                    j2 = j1 + y
+                    F2 = 4
+                end
+            end
+        elseif F1 == 5
+            if x != 0
+                if i1 + x > N
+                    i2 = N - j1 + 1
+                    j2 = mod1(i1 + x,N)
+                    F2 = 3
+                elseif i1 + x < 1
+                    i2 = j1
+                    j2 = 1 - i1 - x
+                    F2 = 1
+                else
+                    i2 = i1 + x
+                    j2 = j1
+                    F2 = 5
+                end
+            else
+                if j1 + y > N
+                    i2 = i1
+                    j2 = mod1(j1 + y,N)
+                    F2 = 2
+                elseif j1 + y < 1
+                    i2 = N - i1 + 1
+                    j2 = 1 - j1 - y
+                    F2 = 4
+                else
+                    i2 = i1
+                    j2 = j1 + y
+                    F2 = 5
+                end
+            end
+        elseif F1 == 6
+            if x != 0
+                if i1 + x > N
+                    i2 = j1
+                    j2 = N - mod1(i1 + x,N) + 1
+                    F2 = 3
+                elseif i1 + x < 1
+                    i2 = N - j1 + 1
+                    j2 = N - i1 - x
+                    F2 = 1
+                else
+                    i2 = i1 + x
+                    j2 = j1
+                    F2 = 6
+                end
+            else
+                if j1 + y > N
+                    i2 = N - i1 + 1
+                    j2 = N - mod1(j1 + y,N) + 1
+                    F2 = 4
+                elseif j1 + y < 1
+                    i2 = i1
+                    j2 = mod1(j1 + y,N)
+                    F2 = 2
+                else
+                    i2 = i1
+                    j2 = j1 + y
+                    F2 = 6
+                end
+            end
+        end
+    else
+        #apply shifts in proper order/orientation
+        if F1 == 6
+            if i1 + x < 1
+                i1,j1,F1 = cube_wrap(i1,j1,F1,x,0,N)
+                i2,j2,F2 = cube_wrap(i1,j1,F1,-y,0,N)
+            elseif i1 + x > N
+                i1,j1,F1 = cube_wrap(i1,j1,F1,x,0,N)
+                i2,j2,F2 = cube_wrap(i1,j1,F1,y,0,N)
+            else
+                i1,j1,F1 = cube_wrap(i1,j1,F1,x,0,N)
+                i2,j2,F2 = cube_wrap(i1,j1,F1,0,y,N)
+            end
+        elseif F1 == 5
+            if i1 + x > N
+                i1,j1,F1 = cube_wrap(i1,j1,F1,x,0,N)
+                i2,j2,F2 = cube_wrap(i1,j1,F1,-y,0,N)
+            elseif i1 + x < 1
+                i1,j1,F1 = cube_wrap(i1,j1,F1,x,0,N)
+                i2,j2,F2 = cube_wrap(i1,j1,F1,y,0,N)
+            else
+                i1,j1,F1 = cube_wrap(i1,j1,F1,x,0,N)
+                i2,j2,F2 = cube_wrap(i1,j1,F1,0,y,N)
+            end
+        else
+            i1,j1,F1 = cube_wrap(i1,j1,F1,x,0,N)
+            i2,j2,F2 = cube_wrap(i1,j1,F1,0,y,N)
+        end
+    end
+    return i2,j2,F2
+end
+
+
+function cubemap_coord_calc(i1::Integer,j1::Integer,F1::Integer,N::Integer)
+    i2 = copy(i1)
+    j2 = copy(j1)
+    
+    if F1 == 1
+        j2 += N
+    elseif F1 == 2
+        i2 += N
+        j2 += N
+    elseif F1 == 3
+        i2 += 2*N
+        j2 += N
+    elseif F1 == 4
+        i2 += 3*N
+        j2 += N
+    elseif F1 == 5
+        i2 += N
+    else
+        i2 += N
+        j2 += 2*N
+    end
+
+    return i2,j2
 end
