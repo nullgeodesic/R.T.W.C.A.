@@ -97,10 +97,12 @@ function ray_kernel!(long_ray_matrix,colors,colors_freq,
 end
 
 
-function color_kernel!(ray_bundle,img_bundle,colors,colors_freq,raylength::Integer,n_bundle_param::Integer)
+function color_kernel!(ray_bundle,img_bundle,colors,colors_freq,raylength::Integer,n_bundle_param::Integer,
+                       skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
     for i in 1:size(ray_bundle,1)
         @views ray = ray_bundle[i,:]
-        skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param)
+        skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param,skybox1,skybox1_pix_height,skybox2,
+                         skybox2_pix_height)
         #calculate pixel value
         img_bundle[i] = calc_xyY(ray,colors,colors_freq)
     end
@@ -129,8 +131,8 @@ Generates an image. Multithreaded.
 - 'fov_vert': vertical field of view, in degrees.
 """
 function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
-                        camera_point=[0.0,0.0,0.0],x_pix=40,max_steps=1e3,colors=[400,550,700],
-                             returnrays=false,tolerance=1e-4::Real,max_dt_scale=1e-2::Real,fov_hor=85::Real,
+                        camera_point=[0.0,0.0,0.0],x_pix=100,max_steps=1e3,colors=[400,550,700],
+                             returnrays=false,tolerance=1e-4::Real,max_dt_scale=1e-1::Real,fov_hor=85::Real,
                    fov_vert=60::Real,print_num_pix=false::Bool,ray_bundles=false::Bool)
     #check that camera is in a valid location
     if is_singularity(camera_pos)
@@ -195,23 +197,30 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
 
     
     #Integrate the rays on the Device
-    
+    start_time = time_ns()
     CUDA.@sync begin
         Cu_ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
                                                    Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
                        Int32(max_steps),Int32(num_pix),n_bundle_param;
                        threads, blocks)
     end
-    
+    end_time = time_ns()
+
+    println("Integrator run time: "*string(round(((end_time - start_time)/1e9),digits = 2))*" s")
     #Bring back the integrated rays to the host
     long_ray_matrix = Array(Cu_ray_matrix)
 
+    #load textures
+    #unfortunately, they can't be held in global memory due to memory leaks
+    skybox1,skybox1_pix_height,skybox2,skybox2_pix_height = load_textures()
+    
     #Calculate the colors of pixels
     chunks = Iterators.partition(1:num_pix,cld(num_pix,100*nthreads()))
     tasks = []
     tasks = map(chunks) do chunk
         @spawn color_kernel!(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
-                            deepcopy(colors),deepcopy(colors_freq),raylength,n_bundle_param)
+                             deepcopy(colors),deepcopy(colors_freq),raylength,n_bundle_param,
+                             skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
     end
     finished_bundles = fetch.(tasks)
     index_counter = 1

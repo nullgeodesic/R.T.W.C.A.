@@ -10,6 +10,11 @@ const emission_scale = 2*h*c*1e27
 const ν_factor = h*c*1e9/k_B
 
 
+function load_textures()
+    #No skybox
+    return 1,1,1,1
+end
+
 
 """
 Planck function (ν in nm^-1).
@@ -131,7 +136,8 @@ Whether to stop integrating the ray.
 end
 
 
-function skybox_handling!(ray,raylength,colors,colors_freq,beamsize)
-    #no skybox
+function skybox_handling!(ray,raylength::Integer,colors,colors_freq,n_bundle_param,skybox1,skybox1_pix_height,
+                          skybox2,skybox2_pix_height)
+    #No skybox
     return nothing
 end

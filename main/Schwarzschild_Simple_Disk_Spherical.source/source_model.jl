@@ -2,8 +2,12 @@
 Author: Levi Malmström
 """
 #CONSTANTS
-#height of skybox in pixels
-const skybox_pix_height = 4
+
+function load_textures()
+    #No skybox
+    return 1,1,1,1
+end
+
 
 """
 Planck function (f in nm^-1).
@@ -49,7 +53,7 @@ Calculates the spectral absorbption coeficient.
     if is_fire(ray)
         return a_nu
     else
-        return 0.0
+        return 0.0f0
     end
 end
 
@@ -75,11 +79,16 @@ Keeps the integrator from going too fast.
     #dλ1 = ϵ/(|v| + δ)
     #dλ2 = ϵ min(θ,π-θ)/(|ω| + δ)
     #dλ3 = ϵ/(|ψ| + δ)
-    max_step_size = min(inv(abs(inv(max_dt_scale/(abs(ray[6])+no_div_zero)) +
-        no_div_zero) + abs(inv(max_dt_scale*min(ray[3],π-ray[3])/(abs(ray[7]) +
+    if ray[3] < π/8 || ray[3] > 7π/8
+        ϵ = min(max_dt_scale,1f-1)
+    else
+        ϵ = max_dt_scale
+    end
+    max_step_size = min(inv(abs(inv(ϵ/(abs(ray[6])+no_div_zero)) +
+        no_div_zero) + abs(inv(ϵ*min(ray[3],π-ray[3])/(abs(ray[7]) +
         no_div_zero) + no_div_zero)) +
-        abs(inv(max_dt_scale/(abs(ray[8])+no_div_zero) + no_div_zero)) + no_div_zero),0.5)
-    max_step_size = max(max_step_size,1e-12)
+        abs(inv(ϵ/(abs(ray[8])+no_div_zero) + no_div_zero)) + no_div_zero),0.5f0)
+    max_step_size = max(max_step_size,1f-12)
     return max_step_size
 end
 
@@ -148,6 +157,8 @@ Whether to stop integrating the ray.
 end
 
 
-function skybox_handling!(ray,raylength,colors,colors_freq,beamsize)
+function skybox_handling!(ray,raylength::Integer,colors,colors_freq,n_bundle_param,skybox1,skybox1_pix_height,
+                          skybox2,skybox2_pix_height)
+    #No skybox
     return nothing
 end

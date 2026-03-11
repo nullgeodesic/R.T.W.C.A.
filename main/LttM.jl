@@ -10,7 +10,7 @@ using Base.Threads
 Runs the integration loop for a single pixel, then calculates it's xyY colorspace value.
 """
 function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,
-                    max_steps,n_bundle_param::Int)
+                    max_steps,n_bundle_param::Int,skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
     #integrate ray
     dt=starting_timestep
 
@@ -47,7 +47,8 @@ function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylen
             raytrace=false
         end
     end
-    skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param)
+    skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param,skybox1,skybox1_pix_height,skybox2,
+                     skybox2_pix_height)
     #calculate pixel value
     xyY_pix=calc_xyY(ray,colors,colors_freq)
     return ray,xyY_pix
@@ -59,12 +60,14 @@ Solves the rays given to it, feeding them into integrate_ray sequentialy.
 """
 function ray_kernel(ray_bag,img_bundle,tolerance::Real,colors,colors_freq,
                               raylength::Integer,abs_tol,rel_tol,max_dt_scale::Real,max_steps::Real,
-                              start_time::UInt64,n_bundle_param::Int)
+                    start_time::UInt64,n_bundle_param::Int,skybox1,skybox1_pix_height,skybox2,
+                    skybox2_pix_height)
     for i in 1:size(ray_bag,1)
-        ray_bag[i,:],img_bundle[i]=integrate_ray(ray_bag[i,:],
+        ray_bag[i,:],img_bundle[i] = integrate_ray(ray_bag[i,:],
                                                      -pad_max_dt(ray_bag[i,1:8],max_dt_scale),
                                                      tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,
-                                                     max_dt_scale,max_steps,n_bundle_param)
+                                                   max_dt_scale,max_steps,n_bundle_param,skybox1,
+                                                   skybox1_pix_height,skybox2,skybox2_pix_height)
     end
     #println("Elapsed time (ns): ",time_ns()-start_time, "; Thread ID: ",threadid())
     
@@ -94,8 +97,8 @@ Generates an image. Multithreaded.
 - 'fov_vert': vertical field of view, in degrees.
 """
 function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
-                        camera_point=[0.0,0.0,0.0],x_pix=40,max_steps=1e3,colors=[400,550,700],
-                             returnrays=false,tolerance=1e-4::Real,max_dt_scale=1e-2::Real,fov_hor=85::Real,
+                        camera_point=[0.0,0.0,0.0],x_pix=100,max_steps=1e3,colors=[400,550,700],
+                             returnrays=false,tolerance=1e-4::Real,max_dt_scale=1e-1::Real,fov_hor=85::Real,
                    fov_vert=60::Real,print_num_pix=false::Bool,ray_bundles=false::Bool)
     #check that camera is in a valid location
     if is_singularity(camera_pos)
@@ -132,8 +135,12 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
 
     long_ray_matrix = reshape(ray_matrix,(num_pix,raylength))
     long_xyY_img = reshape(xyY_img,num_pix)
+
+    #load textures
+    #unfortunately, they can't be held in global memory due to memory leaks
+    skybox1,skybox1_pix_height,skybox2,skybox2_pix_height = load_textures()
     
-    start_time =time_ns()
+    start_time = time_ns()
 
     #Main Loop
     chunks = Iterators.partition(1:num_pix,cld(num_pix,100*nthreads()))
@@ -142,9 +149,12 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
         @spawn ray_kernel(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
                                     deepcopy(tolerance),deepcopy(colors),deepcopy(colors_freq),
                                     deepcopy(raylength),deepcopy(abs_tol),deepcopy(rel_tol),
-                                    deepcopy(max_dt_scale),deepcopy(max_steps),deepcopy(start_time),n_bundle_param)
+                          deepcopy(max_dt_scale),deepcopy(max_steps),deepcopy(start_time),n_bundle_param,
+                          skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
     end
     finished_bundles=fetch.(tasks)
+    end_time = time_ns()
+    println("Integrator run time: "*string(round(((end_time - start_time)/1e9),digits = 2))*" s")
     
     index_counter=1
     for i in 1:length(finished_bundles)

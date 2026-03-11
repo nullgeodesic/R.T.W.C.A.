@@ -248,7 +248,9 @@ function initialize_camera(position::Vector; direction=[0.0,0.0], β=0.0::Real, 
                 #create basis vectors for the bundle shape
                 if !(abs(1 - n[1]) < 1e-3)
                     a = [n[2],1 - n[2]^2/(1-n[1]),-n[2]*n[3]/(1-n[1])]
+                    a = a/dot(a,a)
                     b = [n[3],-n[2]*n[3]/(1-n[1]),1 - n[3]^2/(1-n[1])]
+                    b = b/dot(b,b)
                 else
                     #snap to basis for n[1] close to +1
                     a = [0.0,-1.0,0.0]
@@ -395,10 +397,10 @@ if runtests
         position, direction, pointing, β = initialize_world("wormhole")
         colors=range(350,step=30,stop=750)
         img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,
-                        x_pix=100,speed=β,camera_point = pointing,print_num_pix=true)
+                        x_pix=100,speed=β,camera_point = pointing,print_num_pix=true,ray_bundles=true)
         
         stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,
-                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,print_num_pix=true)
+                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,print_num_pix=true,ray_bundles=true)
         
         test_csv_ref = DataFrame(load("Test Results/TestResults.csv"))
         test_csv = copy(test_csv_ref)

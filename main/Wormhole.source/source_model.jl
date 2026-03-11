@@ -2,14 +2,20 @@
 Author: Levi Malmström
 """
 #CONSTANTS
-#Skybox 1
-const skybox1 = load("Textures/Real_Skies/NASA_Panorama_1024.png")
-#height of skybox1 in pixels
-const skybox1_pix_height = size(skybox1,2) ÷ 4
-#Skybox 2
-const skybox2 = load("Textures/Nebulas/Red_Nebula.png")
-#height of skybox2 in pixels
-const skybox2_pix_height = size(skybox2,2) ÷ 4
+
+
+function load_textures()
+    #Skybox 1
+    skybox1 = load("Textures/Real_Skies/NASA_Sky_4096.png")
+    #height of skybox1 in pixels
+    skybox1_pix_height = size(skybox1,2) ÷ 4
+    #Skybox 2
+    skybox2 = load("Textures/Nebulas/Red_Nebula.png")
+    #height of skybox2 in pixels
+    skybox2_pix_height = size(skybox2,2) ÷ 4
+    return skybox1,skybox1_pix_height,skybox2,skybox2_pix_height
+end
+
 
 """
 Planck function (f in nm^-1).
@@ -68,14 +74,7 @@ end
 Determines if there is emmiting material at a location.
 """
 @inline function is_fire(position)
-    """
-    #wedge shaped disk from 6 <= r <= 12, 15π/32 <= θ <= 17π/32
-    if 6 <= r_of_l(position[2]) <= 12 && 15π/32 <= position[3] <= 17π/32
-        return true
-    else
-        return false
-    end
-    """
+    #empty space everywhere
     return false
 end
 
@@ -88,11 +87,19 @@ Keeps the integrator from going too fast.
     #dλ1 = ϵ/(|v| + δ)
     #dλ2 = ϵ min(θ,π-θ)/(|ω| + δ)
     #dλ3 = ϵ/(|ψ| + δ)
-    max_step_size = min(inv(abs(inv(max_dt_scale/(abs(ray[6]) + no_div_zero)) +
-        no_div_zero) + abs(inv(max_dt_scale*min(ray[3],π-ray[3])/(abs(ray[7]) +
+    if ray[3] < π/8 || ray[3] > 7π/8
+        ϵ = min(max_dt_scale,1f-1)
+    else
+        ϵ = max_dt_scale
+    end
+    if abs(ray[2]) < 100*a_wh
+        ϵ = ϵ/10
+    end
+    max_step_size = min(inv(abs(inv(ϵ/(abs(ray[6])+no_div_zero)) +
+        no_div_zero) + abs(inv(ϵ*min(ray[3],π-ray[3])/(abs(ray[7]) +
         no_div_zero) + no_div_zero)) +
-        abs(inv(max_dt_scale/(abs(ray[8])+no_div_zero) + no_div_zero)) + no_div_zero),0.5)
-    max_step_size = max(max_step_size,1e-12)
+        abs(inv(ϵ/(abs(ray[8])+no_div_zero) + no_div_zero)) + no_div_zero),0.5f0)
+    max_step_size = max(max_step_size,1f-12)
     return max_step_size
 end
 
@@ -137,9 +144,10 @@ Whether to stop integrating the ray.
 end
 
 
-function skybox_I_ν_calc(i::Integer,j::Integer,f::Real,skybox_num::Integer)
+function skybox_I_ν_calc(i::Integer,j::Integer,f::Real,skybox_num::Integer,skybox1,skybox1_pix_height,skybox2,
+                         skybox2_pix_height)
     #Note: pretending sRGB/Rec. 709 is the same as Rec. 2020 for this crude RGB to spectrum scheme
-    #Also, j is flipped in the skybox1 to j_new =  3*skybox1_pix_height + 1 - j
+    #Also, j is flipped in the skybox to j_new =  3*skybox_pix_height + 1 - j
     if skybox_num == 1
         R = Float64(skybox1[3*skybox1_pix_height + 1 - j,i].r)
         #λ = 630 nm; f = 0.001587 nm^-1
@@ -297,7 +305,8 @@ end
 
 
 function calc_skybox_I_ν_beam!(ray,freq_shift::Real,i::Integer,j::Integer,u::Real,v::Real,face::Integer,
-                               raylength::Integer,skybox_pix_height::Integer, skybox_num::Integer, colors_freq)
+                               raylength::Integer,skybox_pix_height::Integer, skybox_num::Integer, colors_freq,
+                               skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
     #calculate the ray beam shape
     
     δ_prime = ray[raylength]*freq_shift
@@ -317,7 +326,10 @@ function calc_skybox_I_ν_beam!(ray,freq_shift::Real,i::Integer,j::Integer,u::Re
     """
 
     #approximate angular size of center-face skybox pixels
-    sky_beamscale = atan(2/(skybox_pix_height + 1))
+    sky_beamscale = atan(2/(skybox_pix_height + 1))/2
+    #Ideally, I would scale the skybox angular size by u,v position, but the method in quotes was creating artifacts
+    #So I simplified it to one beamscale for now.
+    """
     #skybox distortions
     θ = atan(sqrt(u^2 + v^2))
     if u > 0
@@ -333,28 +345,27 @@ function calc_skybox_I_ν_beam!(ray,freq_shift::Real,i::Integer,j::Integer,u::Re
     else
         ϕ = 0
     end
+
     Δθ_r = sky_beamscale*cos(θ)^2
-    Δθ_t = abs(sky_beamscale*cos(θ))
-    #Δθ_x and Δθ_y the angular size of pixels in the x and y direction near the central pixel
+    Δθ_t = sky_beamscale*abs(cos(θ))
+    #Δθ_x and Δθ_y the angular scales of pixels in the x and y direction near the central pixel
     Δθ_x = Δθ_r*abs(cos(ϕ)) + Δθ_t*abs(sin(ϕ))
     Δθ_y = Δθ_r*abs(sin(ϕ)) + Δθ_t*abs(cos(ϕ))
     #figure out beam shape in terms of pixels
     σ_x_new,σ_y_new,μ_new = distort_gauss(δ_major/(δ_minor + no_div_zero),1,μ,δ_prime/(Δθ_x + no_div_zero),
                                           δ_prime/(Δθ_y + no_div_zero))
+    """
 
-    """
-    if isnan(μ_new) || isnan(σ_x_new) || isnan(σ_y_new)
-        println("#",δ_prime," ",δ_major," ",δ_minor," ",μ," ",ray[raylength-5]," ",ray[raylength-4],"E")
-    end
-    """
+    σ_x_new,σ_y_new,μ_new = distort_gauss(δ_major,δ_minor,μ,inv(sky_beamscale + no_div_zero),
+                                          inv(sky_beamscale + no_div_zero))
+
     #figure out how far out to collect pixels
-    h = min(ceil(Int,max(σ_x_new*abs(cos(μ_new)),σ_y_new*abs(sin(μ_new)))),10)
-    w = min(ceil(Int,max(σ_x_new*abs(sin(μ_new)),σ_y_new*abs(cos(μ_new)))),10)
+    h = min(ceil(Integer,max(σ_x_new,σ_y_new)),10)
     
-    #collect weighted spatial average I_ν for each frequency over 4*h*w pixels
+    #collect weighted spatial average I_ν for each frequency over 4*h^2 pixels
     I_ν = zeros(length(colors_freq))
     for k in -h:h
-        for l in -w:w
+        for l in -h:h
             #i,j,face for the pixel
             i_wrapped,j_wrapped,face_wrapped = cube_wrap(i,j,face,k,l,skybox_pix_height)
             #absolute cube map coordinates
@@ -362,7 +373,8 @@ function calc_skybox_I_ν_beam!(ray,freq_shift::Real,i::Integer,j::Integer,u::Re
             for m in 9:2:(raylength - 11)
                 f = colors_freq[ceil(Int,(m-8)/2)]*freq_shift
                 I_ν[ceil(Int,(m-8)/2)] += D2_Gauss(k,l,σ_x = σ_x_new,σ_y = σ_y_new,θ = μ_new)*
-                    skybox_I_ν_calc(i_abs,j_abs,f,skybox_num)*exp(-ray[m+1])/f^3
+                    skybox_I_ν_calc(i_abs,j_abs,f,skybox_num,skybox1,skybox1_pix_height,skybox2,
+                                    skybox2_pix_height)*exp(-ray[m+1])/f^3
             end
         end
     end
@@ -375,7 +387,8 @@ function calc_skybox_I_ν_beam!(ray,freq_shift::Real,i::Integer,j::Integer,u::Re
 end
 
 
-function skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param)
+function skybox_handling!(ray,raylength::Integer,colors,colors_freq,n_bundle_param,skybox1,skybox1_pix_height,
+                          skybox2,skybox2_pix_height)
     if r_of_l(ray[2]) > 50 && ray[2] > 0
         skybox_num = 1
         position4 = ray[1:4]
@@ -391,11 +404,13 @@ function skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param)
             i_abs,j_abs = cubemap_coord_calc(i,j,face,skybox1_pix_height)
             for k in 9:2:raylength
                 f = colors_freq[ceil(Int,(k-8)/2)]*freq_shift
-                ray[k] += skybox_I_ν_calc(i_abs,j_abs,f,skybox_num)*exp(-ray[k+1])/f^3
+                ray[k] += skybox_I_ν_calc(i_abs,j_abs,f,skybox_num,skybox1,skybox1_pix_height,skybox2,
+                                          skybox2_pix_height)*exp(-ray[k+1])/f^3
             end
         else
             calc_skybox_I_ν_beam!(ray,freq_shift,i,j,u,v,face,
-                                  raylength,skybox1_pix_height,skybox_num,colors_freq)
+                                  raylength,skybox1_pix_height,skybox_num,colors_freq,skybox1,skybox1_pix_height,
+                                  skybox2,skybox2_pix_height)
         end
             
     elseif r_of_l(ray[2]) > 50 && ray[2] < 0
@@ -412,11 +427,13 @@ function skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param)
             i_abs,j_abs = cubemap_coord_calc(i,j,face,skybox2_pix_height)
             for k in 9:2:raylength
                 f = colors_freq[ceil(Int,(k-8)/2)]*freq_shift
-                ray[k] += skybox_I_ν_calc(i_abs,j_abs,f,skybox_num)*exp(-ray[k+1])/f^3
+                ray[k] += skybox_I_ν_calc(i_abs,j_abs,f,skybox_num,skybox1,skybox1_pix_height,skybox2,
+                                          skybox2_pix_height)*exp(-ray[k+1])/f^3
             end
         else
             calc_skybox_I_ν_beam!(ray,freq_shift,i,j,u,v,face,
-                                  raylength,skybox2_pix_height,skybox_num,colors_freq)
+                                  raylength,skybox2_pix_height,skybox_num,colors_freq,skybox1,skybox1_pix_height,
+                                  skybox2,skybox2_pix_height)
         end
     end
     return nothing
