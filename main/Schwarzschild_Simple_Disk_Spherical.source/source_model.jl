@@ -104,16 +104,16 @@ Velocity of the material at a position (mutating).
     if is_fire(position)
         #circular orbit
         source_vel_buffer[1] = inv(sqrt(1 - 3*M/position[2]))
-        source_vel_buffer[2] = 0.0
-        source_vel_buffer[3] = 0.0
+        source_vel_buffer[2] = 0.0f0
+        source_vel_buffer[3] = 0.0f0
         source_vel_buffer[4] = inv(sqrt(1 - 3*M/position[2]))*sqrt(M/position[2]^3)
         return nothing
     else
         #FIDO
         source_vel_buffer[1] = inv(sqrt(1 - 2*M/position[2]))
-        source_vel_buffer[2] = 0.0
-        source_vel_buffer[3] = 0.0
-        source_vel_buffer[4] = 0.0
+        source_vel_buffer[2] = 0.0f0
+        source_vel_buffer[3] = 0.0f0
+        source_vel_buffer[4] = 0.0f0
         return nothing
     end
 

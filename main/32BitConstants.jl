@@ -1,6 +1,4 @@
 """
-v0.4.0
-January 7 2026
 Author: Levi Malmström
 """
 

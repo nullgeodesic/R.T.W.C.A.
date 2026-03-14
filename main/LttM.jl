@@ -4,7 +4,6 @@ Author: Levi Malmström
 
 include("integrators_LttM.jl")
 
-using Base.Threads
 
 """
 Runs the integration loop for a single pixel, then calculates it's xyY colorspace value.

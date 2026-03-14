@@ -65,7 +65,7 @@ Calculates the spectral absorbption coeficient.
     if is_fire(ray)
         return a_nu
     else
-        return 0.0
+        return 0.0f0
     end
 end
 
@@ -109,10 +109,10 @@ Velocity of the material at a position (mutating).
 """
 @inline function get_source_velocity!(position,source_vel_buffer)
     #FIDO
-    source_vel_buffer[1] = 1.0
-    source_vel_buffer[2] = 0.0
-    source_vel_buffer[3] = 0.0
-    source_vel_buffer[4] = 0.0
+    source_vel_buffer[1] = 1.0f0
+    source_vel_buffer[2] = 0.0f0
+    source_vel_buffer[3] = 0.0f0
+    source_vel_buffer[4] = 0.0f0
     return nothing
 end
 
@@ -121,7 +121,7 @@ end
 Velocity of the material at a position (non-mutating).
 """
 function get_source_velocity(position)
-    return [1.0,0.0,0.0,0.0]
+    return [1.0f0,0.0f0,0.0f0,0.0f0]
 end
 
 

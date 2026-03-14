@@ -31,7 +31,7 @@ end
 
 @inline function dr_dl(l::Real)
     if abs(l) <= a_wh
-        return 0.0
+        return 0.0f0
     else
         x = x_of_l(l)
         return 2*sign(l)*(atan(x) + (x-1)/(1+x^2))/π
@@ -43,8 +43,8 @@ end
 Calculates the metric-matrix g_ij at a position (mutating).
 """
 @inline function calc_lower_metric!(position,g)
-    g[1,1] = -1
-    g[2,2] = 1
+    g[1,1] = -1.0f0
+    g[2,2] = 1.0f0
     g[3,3] = r_of_l(position[2])^2
     g[4,4] = (r_of_l(position[2])*sin(position[3]))^2
     return nothing
@@ -56,8 +56,8 @@ Calculates the metric-matrix g_ij at a position (non-mutating).
 """
 function calc_lower_metric(position)
     g=Matrix{Float64}(I,4,4)
-    g[1,1] = -1
-    g[2,2] = 1
+    g[1,1] = -1.0f0
+    g[2,2] = 1.0f0
     g[3,3] = r_of_l(position[2])^2
     g[4,4] = (r_of_l(position[2])*sin(position[3]))^2
     return g
@@ -69,8 +69,8 @@ Calculates the vierbein at a position.
 """
 function calc_vierbein(position)
     vierbein = Matrix{Float64}(I,4,4)
-    vierbein[1,1] = 1
-    vierbein[2,2] = 1
+    vierbein[1,1] = 1.0f0
+    vierbein[2,2] = 1.0f0
     vierbein[3,3] = r_of_l(position[2])
     vierbein[4,4] = r_of_l(position[2])*sin(position[3])
     return vierbein
@@ -82,8 +82,8 @@ Calculates the inverse vierbein at a position.
 """
 function calc_inv_vierbein(position)
     inv_vierbein = Matrix{Float64}(I,4,4)
-    inv_vierbein[1,1] = 1
-    inv_vierbein[2,2] = 1
+    inv_vierbein[1,1] = 1.0f0
+    inv_vierbein[2,2] = 1.0f0
     inv_vierbein[3,3] = inv(r_of_l(position[2]))
     inv_vierbein[4,4] = inv(r_of_l(position[2])*sin(position[3]) + no_div_zero)
     return inv_vierbein
@@ -95,14 +95,14 @@ Calculates the Christoffel Symbols of the second kind at a position.
 """
 @inline function calc_christoffel_udd(ray,index::Tuple)
     if index[1]==1
-        return 0.0
+        return 0.0f0
     elseif index[1]==2
         if index[2]==3 && index[3]==3
             return -r_of_l(ray[2])*dr_dl(ray[2])
         elseif index[2]==4 && index[3]==4
             return -r_of_l(ray[2])*dr_dl(ray[2])*sin(ray[3])^2
         else
-            return 0.0
+            return 0.0f0
         end
     elseif index[1]==3
         if (index[2]==2 && index[3]==3) || (index[2]==3 && index[3]==2)
@@ -110,7 +110,7 @@ Calculates the Christoffel Symbols of the second kind at a position.
         elseif index[2]==4 && index[3]==4
             return -sin(ray[3])*cos(ray[3])
         else
-            return 0.0
+            return 0.0f0
         end
     elseif index[1]==4
         if (index[2]==2 && index[3]==4) || (index[2]==4 && index[3]==2)
@@ -118,10 +118,10 @@ Calculates the Christoffel Symbols of the second kind at a position.
         elseif (index[2]==3 && index[3]==4) || (index[2]==4 && index[3]==3)
             return cot(ray[3])
         else
-            return 0.0
+            return 0.0f0
         end
     else
-        return 0.0
+        return 0.0f0
     end           
 end
 
@@ -173,7 +173,7 @@ end
 If the ray is on a coordinate singularity.
 """
 @inline function is_singularity(position)
-    if abs(position[3]) <= 1e-323 || abs(position[3] - π) <= 1e-323
+    if abs(position[3]) <= 1f-32 || abs(position[3] - π) <= 1f-32
         return true
     else
         return false

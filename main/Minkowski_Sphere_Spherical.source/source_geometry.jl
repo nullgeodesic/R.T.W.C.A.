@@ -8,7 +8,7 @@ Author: Levi Malmström
 Calculates the metric-matrix g_ij at a position (mutating).
 """
 @inline function calc_lower_metric!(position,g)
-    g[1,1]=-1
+    g[1,1]=-1.0f0
     g[3,3]=position[2]^2
     g[4,4]=(position[2]*sin(position[3]))^2
     return nothing
@@ -20,7 +20,7 @@ Calculates the metric-matrix g_ij at a position (non-mutating).
 """
 function calc_lower_metric(position)
     g=Matrix{Float64}(I,4,4)
-    g[1,1]=-1
+    g[1,1]=-1.0f0
     g[3,3]=position[2]^2
     g[4,4]=(position[2]*sin(position[3]))^2
     return g
@@ -43,14 +43,14 @@ Calculates the Christoffel symbols of the second kind at a position.
 """
 @inline function calc_christoffel_udd(position,index::Tuple)
     if index[1]==1
-        return 0.0
+        return 0.0f0
     elseif index[1]==2
         if index[2]==3 && index[3]==3
             return -position[2]
         elseif index[2]==4 && index[3]==4
             return -position[2]*sin(position[3])^2
         else
-            return 0.0
+            return 0.0f0
         end
     elseif index[1]==3
         if (index[2]==2 && index[3]==3) || (index[2]==3 && index[3]==2)
@@ -58,7 +58,7 @@ Calculates the Christoffel symbols of the second kind at a position.
         elseif index[2]==4 && index[3]==4
             return -sin(position[3])*cos(position[3])
         else
-            return 0.0
+            return 0.0f0
         end
     elseif index[1]==4
         if (index[2]==2 && index[3]==4) || (index[2]==4 && index[3]==2)
@@ -66,10 +66,10 @@ Calculates the Christoffel symbols of the second kind at a position.
         elseif (index[2]==3 && index[3]==4) || (index[2]==4 && index[3]==3)
             return cot(position[3])
         else
-            return 0.0
+            return 0.0f0
         end
     else
-        return 0.0
+        return 0.0f0
     end           
 end
 
@@ -88,7 +88,7 @@ Determines if the ray is near a coordinate singularity.
         return true, 2*abs(ray[3])/(abs(ray[7]*9) + no_div_zero)
     #check if near θ = π
     elseif abs(θ_new - π) <= abs_tol[3]
-        return true, 2*abs((ray[3] - pi)/(abs(ray[7]*9) + no_div_zero))
+        return true, 2*abs((ray[3] - π)/(abs(ray[7]*9) + no_div_zero))
     #check if near r = 0
     elseif abs(new_r) <= abs_tol[2]
         return true, 2*(abs_tol[2])/(abs(ray[6]*9) + no_div_zero)
@@ -133,9 +133,9 @@ end
 If the ray is on a coordinate singularity.
 """
 @inline function is_singularity(position)
-    if abs(position[2]) <= 1e-323
+    if abs(position[2]) <= 1f-32
         return true
-    elseif abs(position[3]) <= 1e-323 || abs(position[3] - π) <= 1e-323
+    elseif abs(position[3]) <= 1f-32 || abs(position[3] - π) <= 1f-32
         return true
     else
         return false

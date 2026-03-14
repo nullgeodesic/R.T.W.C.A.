@@ -20,8 +20,8 @@ Calculates the derivative of the ray with respect to affine parameter (mutating)
                 a -= calc_christoffel_udd(Ray,(i-4,j-4,k-4))*Ray[j]*Ray[k]
             end
         end
-        if abs(a) > 1e9
-            a=1e9
+        if abs(a) > 1f9
+            a=1f9
         end
         slope[i] = a
     end

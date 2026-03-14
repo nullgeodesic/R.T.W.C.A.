@@ -32,6 +32,9 @@ using Profile
 using DataFrames
 #Pkg.add("CSVFiles")
 using CSVFiles
+#Pkg.add("StaticArrays")
+using StaticArrays
+using Base.Threads
 
 #load general modules
 include("gen_geometry.jl")

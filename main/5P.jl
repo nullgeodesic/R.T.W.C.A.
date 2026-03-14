@@ -5,9 +5,8 @@ Author: Levi Malmström
 using Pkg
 #Pkg.add("CUDA")
 using CUDA
-#Pkg.add("StaticArrays")
-using StaticArrays
-using Base.Threads
+#not sure if this actually speeds up my code, but whatever
+using CUDA: i32
 
 include("integrators_5P.jl")
 
@@ -150,7 +149,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
         println("Number of Pixels ",num_pix)
     end
 
-    n_bundle_param = 11*ray_bundles
+    n_bundle_param = Int32(11*ray_bundles)
     n_colors = length(colors)
     raylength = 8 + 2*n_colors + n_bundle_param
     long_ray_matrix = reshape(ray_matrix,(num_pix,raylength))

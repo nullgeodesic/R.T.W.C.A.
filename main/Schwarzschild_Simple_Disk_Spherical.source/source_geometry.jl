@@ -12,10 +12,10 @@ const r_s = 2*M
 Calculates the metric-matrix g_ij at a position (mutating).
 """
 @inline function calc_lower_metric!(position,g)
-    g[1,1] = -(1 - r_s/position[2])
-    g[2,2] = inv(1 - r_s/position[2])
-    g[3,3]=position[2]^2
-    g[4,4]=(position[2]*sin(position[3]))^2
+    g[1,1] = -(1.0f0 - r_s/position[2])
+    g[2,2] = inv(1.0f0 - r_s/position[2])
+    g[3,3] = position[2]^2
+    g[4,4] = (position[2]*sin(position[3]))^2
     return nothing
 end
 
@@ -25,10 +25,10 @@ Calculates the metric-matrix g_ij at a position (non-mutating).
 """
 function calc_lower_metric(position)
     g=Matrix{Float64}(I,4,4)
-    g[1,1] = -(1 - r_s/position[2])
-    g[2,2] = inv(1 - r_s/position[2])
-    g[3,3]=position[2]^2
-    g[4,4]=(position[2]*sin(position[3]))^2
+    g[1,1] = -(1.0f0 - r_s/position[2])
+    g[2,2] = inv(1.0f0 - r_s/position[2])
+    g[3,3] = position[2]^2
+    g[4,4] = (position[2]*sin(position[3]))^2
     return g
 end
 
@@ -38,8 +38,8 @@ Calculates the inverse vierbein at a position.
 """
 function calc_inv_vierbein(position)
     inv_vierbein = Matrix{Float64}(I,4,4)
-    inv_vierbein[1,1] = inv(sqrt(1 - r_s/position[2]))
-    inv_vierbein[2,2] = sqrt(1 - r_s/position[2])
+    inv_vierbein[1,1] = inv(sqrt(1.0f0 - r_s/position[2]))
+    inv_vierbein[2,2] = sqrt(1.0f0 - r_s/position[2])
     inv_vierbein[3,3] = inv(position[2])
     inv_vierbein[4,4] = inv(position[2]*sin(position[3]) + no_div_zero)
     return inv_vierbein
@@ -54,7 +54,7 @@ Calculates the Christoffel symbols of the second kind at a position.
         if (index[2] == 1 && index[3] == 2) || (index[2] == 2 && index[3] == 1)
             return r_s/(2*ray[2]*(ray[2] - r_s))
         else
-            return 0.0
+            return 0.0f0
         end
     elseif index[1]==2
         if index[2]==1 && index[3]==1
@@ -66,7 +66,7 @@ Calculates the Christoffel symbols of the second kind at a position.
         elseif index[2]==4 && index[3]==4
             return -(ray[2]-r_s)*sin(ray[3])^2
         else
-            return 0.0
+            return 0.0f0
         end
     elseif index[1]==3
         if (index[2]==2 && index[3]==3) || (index[2]==3 && index[3]==2)
@@ -74,7 +74,7 @@ Calculates the Christoffel symbols of the second kind at a position.
         elseif index[2]==4 && index[3]==4
             return -sin(ray[3])*cos(ray[3])
         else
-            return 0.0
+            return 0.0f0
         end
     elseif index[1]==4
         if (index[2]==2 && index[3]==4) || (index[2]==4 && index[3]==2)
@@ -82,10 +82,10 @@ Calculates the Christoffel symbols of the second kind at a position.
         elseif (index[2]==3 && index[3]==4) || (index[2]==4 && index[3]==3)
             return cot(ray[3])
         else
-            return 0.0
+            return 0.0f0
         end
     else
-        return 0.0
+        return 0.0f0
     end           
 end
 
@@ -97,14 +97,14 @@ Determines if the ray is near a coordinate singularity.
     dθ = stepsize*ray[7]
     θ_new = ray[3] + dθ
     dr = stepsize*ray[6]
-    new_r = ray[2]+dr
+    new_r = ray[2] + dr
 
     #check if near θ = 0
     if abs(θ_new) <= abs_tol[3]
         return true, 2*abs(ray[3])/(abs(ray[7]*9) + no_div_zero)
     #check if near θ = π
     elseif abs(θ_new - π) <= abs_tol[3]
-        return true, 2*abs((ray[3] - pi)/(abs(ray[7]*9) + no_div_zero))
+        return true, 2*abs((ray[3] - π)/(abs(ray[7]*9) + no_div_zero))
 """
     #check if near r = 0
     elseif abs(new_r) <= abs_tol[2]
@@ -152,9 +152,9 @@ end
 If the ray is on a coordinate singularity.
 """
 @inline function is_singularity(position)
-    if abs(position[2]) <= 1e-323
+    if abs(position[2]) <= 1f-32
         return true
-    elseif abs(position[3]) <= 1e-323 || abs(position[3] - π) <= 1e-323
+    elseif abs(position[3]) <= 1f-32 || abs(position[3] - π) <= 1e-32
         return true
     else
         return false
