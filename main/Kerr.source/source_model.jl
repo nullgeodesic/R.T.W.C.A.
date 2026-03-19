@@ -1,7 +1,7 @@
 """
 Author: Levi Malmström
 """
-#CONSTANTS
+
 
 function load_textures()
     #No skybox
@@ -48,8 +48,8 @@ end
 Calculates the spectral absorbption coeficient.
 """
 @inline function calc_spectral_absorbtion_coeficient(ray,frequency)
-    #units are 1/M
-    a_nu = 1/map_scale
+    #units are 1/map_scale
+    a_nu = 0.1f0/Float32(map_scale)
     if is_fire(ray)
         return a_nu
     else
@@ -62,8 +62,8 @@ end
 Determines if there is emmiting material at a location.
 """
 @inline function is_fire(position)
-    #wedge shaped disk from 6 <= r <= 12, 15π/32 <= θ <= 17π/32
-    if 6 <= position[2] <= 12 && 15π/32 <= position[3] <= 17π/32
+    #wedge shaped disk in r_ISCO_prograde <= r <= 12, 31π/64 <= θ <= 33π/64
+    if r_ISCO_prograde <= position[2] <= 12 && 31π/64 <= position[3] <= 33π/64
         return true
     else
         return false
@@ -81,12 +81,9 @@ Keeps the integrator from going too fast.
     #dλ3 = ϵ/(|ψ| + δ)
     #slow down near poles
     if ray[3] < π/8 || ray[3] > 7π/8
-        ϵ = min(max_dt_scale,1f-1)
-    #slow down near photon sphere
-    elseif ray[2] <= 1.5*r_ph
-        ϵ = max_dt_scale/10
+        ϵ = min(Float32(max_dt_scale),1f-1)
     else
-        ϵ = max_dt_scale
+        ϵ = Float32(max_dt_scale)
     end
     max_step_size = min(inv(abs(inv(ϵ/(abs(ray[6])+no_div_zero)) +
         no_div_zero) + abs(inv(ϵ*min(ray[3],π-ray[3])/(abs(ray[7]) +
@@ -101,23 +98,30 @@ end
 Velocity of the material at a position (mutating).
 """
 @inline function get_source_velocity!(position,source_vel_buffer)
-    #M=1
-    #Ω = sqrt(M/r^3)
-    #ut = (1 - 3M/r)^(-1/2)
-    #uα = ut*[1,0,0,Ω]
     if is_fire(position)
-        #circular orbit
-        source_vel_buffer[1] = inv(sqrt(1 - 3*M/position[2]))
+        #prograde equatorial circular orbit
+        Ω = sqrt(M)/(position[2]^(3/2) + α*M)
+        D = position[2]^(3/2) - 3*M*sqrt(position[2]) + 2*α*sqrt(M)
+        ut = (position[2]^(3/2) + α*sqrt(M))/(position[2]^(3/4)*sqrt(D))
+        #uα = ut*[1,0,0,Ω]
+        source_vel_buffer[1] = ut
         source_vel_buffer[2] = 0.0f0
         source_vel_buffer[3] = 0.0f0
-        source_vel_buffer[4] = inv(sqrt(1 - 3*M/position[2]))*sqrt(M/position[2]^3)
+        source_vel_buffer[4] = ut*Ω
         return nothing
     else
         #FIDO
-        source_vel_buffer[1] = inv(sqrt(1 - 2*M/position[2]))
+        A = sqrt(position[2]^2 + (α*cos(position[3]))^2)
+        B = position[2]^2 + α^2 - 2*M*position[2]
+        C = (position[2]^2 + α^2)^2 - B*(α*sin(position[3]))^2
+        #ut = 1/lapse rate
+        ut = sqrt(C)/(A*sqrt(B))
+        Ω = 2*α*M*position[2]/C
+        #uα = ut*[1,0,0,Ω]
+        source_vel_buffer[1] = ut
         source_vel_buffer[2] = 0.0f0
         source_vel_buffer[3] = 0.0f0
-        source_vel_buffer[4] = 0.0f0
+        source_vel_buffer[4] = ut*Ω
         return nothing
     end
 
@@ -128,14 +132,23 @@ end
 Velocity of the material at a position (non-mutating).
 """
 function get_source_velocity(position)
-    #M=1
-    #Ω = sqrt(M/r^3)
-    #ut = (1 - 3M/r)^(-1/2)
-    #uα = ut*[1,0,0,Ω]
     if is_fire(position)
-        return [inv(sqrt(1 - 3*M/position[2])),0,0,inv(sqrt(1 - 3*M/position[2]))*sqrt(M/position[2]^3)]
+        #prograde equatorial circular orbit
+        Ω = sqrt(M)/(position[2]^(3/2) + α*M)
+        D = position[2]^(3/2) - 3*M*sqrt(position[2]) + 2*α*sqrt(M)
+        ut = (position[2]^(3/2) + α*sqrt(M))/(position[2]^(3/4)*sqrt(D))
+        #uα = ut*[1,0,0,Ω]
+        return [ut,0,0,ut*Ω]
     else
-        return [inv(sqrt(1 - 2*M/position[2])),0,0,0]
+        #FIDO
+        A = sqrt(position[2]^2 + (α*cos(position[3]))^2)
+        B = position[2]^2 + α^2 - 2*M*position[2]
+        C = (position[2]^2 + α^2)^2 - B*(α*sin(position[3]))^2
+        #ut = 1/lapse rate
+        ut = sqrt(C)/(A*sqrt(B))
+        Ω = 2*α*M*position[2]/C
+        #uα = ut*[1,0,0,Ω]
+        return [ut,0,0,ut*Ω]
     end
 
 end
@@ -146,7 +159,7 @@ Whether to stop integrating the ray.
 """
 @inline function calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale, max_steps,step_count)
     terminate = false
-    if step_count >= max_steps || ray[2] > 100 || ray[2] <= (1 + 10*rel_tol[2])*r_s || ray[4] > 8π
+    if step_count >= max_steps || ray[2] > 100 || ray[2] <= (1 + 10*rel_tol[2])*r_ev || ray[4] > 8π
         terminate = true
     else
         terminate = true

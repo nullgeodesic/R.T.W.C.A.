@@ -6,6 +6,7 @@ Author: Levi Malmström
 const M = map_scale
 const r_s = 2*M
 #r > r_s
+const r_ph = 3*M
 
 
 """
@@ -30,6 +31,19 @@ function calc_lower_metric(position)
     g[3,3] = position[2]^2
     g[4,4] = (position[2]*sin(position[3]))^2
     return g
+end
+
+
+"""
+Calculates the vierbein at a position.
+"""
+function calc_vierbein(position)
+    vierbein = Matrix{Float64}(I,4,4)
+    vierbein[1,1] = sqrt(1.0f0 - r_s/position[2])
+    vierbein[2,2] = inv(sqrt(1.0f0 - r_s/position[2]))
+    vierbein[3,3] = position[2]
+    vierbein[4,4] = position[2]*sin(position[3])
+    return vierbein
 end
 
 
