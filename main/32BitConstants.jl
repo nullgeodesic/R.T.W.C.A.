@@ -24,7 +24,6 @@ const no_div_zero = Float32(1e-24)
 const emission_scale = 2*h*c*1f27
 #h/k_B in nm/K, instead of the normal s/K, because ν is in units of nm^-1, not Hz
 const f_factor = h*c*1f9/k_B
-#Color match function fit values
 #Dormand-Prince Butcher table
 const DP_Butcher = Array{Float32}([
 [0 0 0 0 0 0 0 0];

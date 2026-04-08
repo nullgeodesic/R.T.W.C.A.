@@ -41,15 +41,15 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
     end
     for i in 9:(raylength - n_bundle_param)
         if isodd(i)
-            nu=colors_freq[ceil(Int,(i-8)/2)]*freq_shift
+            ν = colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and
-            #the camera
-            slope[i] = -calc_spectral_emission_coeficient(Ray,nu)*exp(-Ray[i+1])/nu^3
+            #the camera (Younsi et. al. 2012)
+            slope[i] = -inv(freq_shift)*calc_spectral_emission_coeficient(Ray,ν)*exp(-Ray[i+1])/ν^3
         else
-            nu=-colors_freq[ceil(Int,(i-8)/2)]*freq_shift
+            ν = -colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the optical depth which the ray "will" (hence the - sign) pass through in the "future"
-            #(+lambda) to get to the camera
-            slope[i]=-calc_spectral_absorbtion_coeficient(Ray,nu)*freq_shift
+            #(+lambda) to get to the camera (Younsi et. al. 2012)
+            slope[i] = -inv(freq_shift)*calc_spectral_absorbtion_coeficient(Ray,ν)
         end
     end
     #note: in the future I will add the proper ray bundle integration equations

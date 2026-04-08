@@ -47,7 +47,7 @@ Runs the integration loop for a single pixel.
     k7 = @MVector zeros(Float32,raylength)
 
     rejected = false
-    raytrace=true
+    raytrace = true
     step_count = 0
 
     

@@ -39,7 +39,7 @@ Calculates the spectral emission coeficient for a BB radiator.
 @inline function calc_spectral_emission_coeficient(ray,frequency)
     #j_nu = a_nu*B_nu for thermal emission
     #units are m^-1 with default scale
-    j_nu=calc_spectral_absorbtion_coeficient(ray,frequency)*calc_planck(get_temp(ray),frequency)
+    j_nu = calc_spectral_absorbtion_coeficient(ray,frequency)*calc_planck(get_temp(ray),frequency)
     return j_nu
 end
 

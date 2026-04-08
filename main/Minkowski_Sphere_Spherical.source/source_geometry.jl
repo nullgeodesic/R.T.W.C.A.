@@ -8,9 +8,10 @@ Author: Levi Malmström
 Calculates the metric-matrix g_ij at a position (mutating).
 """
 @inline function calc_lower_metric!(position,g)
-    g[1,1]=-1.0f0
-    g[3,3]=position[2]^2
-    g[4,4]=(position[2]*sin(position[3]))^2
+    g[1,1] = -1.0f0
+    g[2,2] = 1.0f0
+    g[3,3] = position[2]^2
+    g[4,4] = (position[2]*sin(position[3]))^2
     return nothing
 end
 
@@ -24,6 +25,17 @@ function calc_lower_metric(position)
     g[3,3]=position[2]^2
     g[4,4]=(position[2]*sin(position[3]))^2
     return g
+end
+
+
+"""
+Calculates the vierbein at a position.
+"""
+function calc_vierbein(position)
+    vierbein = Matrix{Float64}(I,4,4)
+    vierbein[3,3] = position[2]
+    vierbein[4,4] = position[2]*sin(position[3])
+    return vierbein
 end
 
 

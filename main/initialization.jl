@@ -308,7 +308,6 @@ function initialize_camera(position::Vector; direction=[0.0,0.0], β=0.0::Real, 
     return S
 end
 
-
 #decide whether to run tests
 print("Type 'yes' if you want to run an automated test: ")
 to_test = lowercase(readline())
@@ -317,6 +316,7 @@ if to_test == "yes"
 else
     runtests = false
 end
+#runtests = false
 
 if runtests
     print("Type the test you would like to perform (e.g. 'bh_simple'): ")

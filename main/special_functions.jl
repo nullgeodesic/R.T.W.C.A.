@@ -49,3 +49,49 @@ function distort_gauss(σ_x::Real,σ_y::Real,θ::Real,a::Real,b::Real)
 
     return σ_x_new,σ_y_new,θ_new
 end
+
+
+"""
+Type 1 Chebyshev polynomials. (recursive)
+"""
+function Chebyshev_r(n::Integer,x::Real)
+    if n > 1
+        T = Float32(2*x*Chebyshev_r(n - 1,x) - Chebyshev_r(n - 2,x))
+    elseif n == 1
+        T = Float32(x)
+    else
+        T = 1.0f0
+    end
+    return T
+end
+
+"""
+Type 1 Chebyshev polynomials. (first 11)
+"""
+@inline function Chebyshev_e(n::Integer,x::Real)
+    if n <= 0
+        return 1.0f0
+    elseif n == 1
+        return Float32(x)
+    elseif n == 2
+        return Float32(2*x^2 - 1)
+    elseif n == 3
+        return Float32(4*x^3 - 3*x)
+    elseif n == 4
+        return Float32(8*x^4 - 8*x^2 + 1)
+    elseif n == 5
+        return Float32(16*x^5 - 20*x^3 + 5*x)
+    elseif n == 6
+        return Float32(32*x^6 - 48*x^4 + 18*x^2 - 1)
+    elseif n == 7
+        return Float32(64*x^7 - 112*x^5 + 56*x^3 - 7*x)
+    elseif n == 8
+        return Float32(128*x^8 - 256*x^6 + 160*x^4 -32*x^2 + 1)
+    elseif n == 9
+        return Float32(256*x^9 -576*x^7 + 432*x^5 -120*x^3 + 9*x)
+    elseif n == 10
+        return Float32(512*x^10 -1280*x^8 + 1120*x^6 - 400*x^4 + 50*x^2 - 1)
+    else
+        return 1.0f0
+    end
+end
