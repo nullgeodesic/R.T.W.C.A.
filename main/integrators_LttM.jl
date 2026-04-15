@@ -10,20 +10,21 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
     #calculate derivative at a point
     for i in 1:4
         #dx/dl=v
-        slope[i]=Ray[i+4]
+        slope[i] = Ray[i+4]
     end
     for i in 5:8
         #geodesic equation
-        a=0
+        a = 0
         for j in 5:8
             for k in 5:8
                 a -= calc_christoffel_udd(Ray,(i-4,j-4,k-4))*Ray[j]*Ray[k]
             end
         end
-        if abs(a) > 1e9
-            a=1e9
-        end
-        slope[i]=a
+        #uncomment to fail quietly  at singularities/edge cases
+        #if !(abs(a) < 1f9)
+            #a = 0f0
+        #end
+        slope[i] = a
     end
 
     #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
@@ -39,6 +40,10 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
         end
         freq_shift -= source_vel[j] * part_sum
     end
+    #uncomment to fail quietly  at singularities/edge cases
+    #if !(1f-9 < abs(freq_shift) < 1f9)
+        #freq_shift = 1f0
+    #end
     for i in 9:(raylength - n_bundle_param)
         if isodd(i)
             ν = colors_freq[ceil(Int,(i-8)/2)]*freq_shift
@@ -84,7 +89,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
             println("Bad Numbers Warning! ", Ray[1:8], " ",threadid())
         end
         """
-        for i in 1:8
+        for i in 1:36
             if !calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
                 calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param)
                 #Ray -= temp_stepsize*k1
@@ -110,7 +115,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
         #then hand the ray back to the normal Runge-Kutta integrator
         calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param)
 
-        @views stepsize = -pad_max_dt(Ray, max_dt_scale)
+        stepsize = -pad_max_dt(Ray, max_dt_scale)
     end
 
     #'buffer' is used to cut out the memory allocations on array math
@@ -179,7 +184,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
     end
     
     
-    error=0
+    error = 0
     #note: I don't care about error in the bundle shape
     for i in 1:(raylength - n_bundle_param)
         tol = abs_tol[i] + max(abs(Ray[i]),abs(y[i]))*rel_tol[i]

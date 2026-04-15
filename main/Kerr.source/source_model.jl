@@ -49,7 +49,7 @@ Calculates the spectral absorbption coeficient.
 """
 @inline function calc_spectral_absorbtion_coeficient(ray,frequency)
     #units are 1/map_scale
-    a_nu = 0.1f0/Float32(map_scale)
+    a_nu = 1f-1/Float32(map_scale)
     if is_fire(ray)
         return a_nu
     else
@@ -79,13 +79,13 @@ Keeps the integrator from going too fast.
     #dλ1 = ϵ/(|v| + δ)
     #dλ2 = ϵ min(θ,π-θ)/(|ω| + δ)
     #dλ3 = ϵ/(|ψ| + δ)
-    #slow down near poles
+    #min speed near poles
     if ray[3] < π/8 || ray[3] > 7π/8
         ϵ = min(Float32(max_dt_scale),1f-1)
     else
         ϵ = Float32(max_dt_scale)
     end
-    max_step_size = min(inv(abs(inv(ϵ/(abs(ray[6])+no_div_zero)) +
+    max_step_size = min(inv(abs(inv(ϵ/(abs(ray[6]))) +
         no_div_zero) + abs(inv(ϵ*min(ray[3],π-ray[3])/(abs(ray[7]) +
         no_div_zero) + no_div_zero)) +
         abs(inv(ϵ/(abs(ray[8])+no_div_zero) + no_div_zero)) + no_div_zero),0.5f0)
@@ -100,7 +100,7 @@ Velocity of the material at a position (mutating).
 @inline function get_source_velocity!(position,source_vel_buffer)
     if is_fire(position)
         #prograde equatorial circular orbit
-        Ω = sqrt(M)/(position[2]^(3/2) + α*M)
+        Ω = sqrt(M)/(position[2]^(3/2) + α*sqrt(M))
         D = position[2]^(3/2) - 3*M*sqrt(position[2]) + 2*α*sqrt(M)
         ut = (position[2]^(3/2) + α*sqrt(M))/(position[2]^(3/4)*sqrt(D))
         #uα = ut*[1,0,0,Ω]
@@ -134,7 +134,7 @@ Velocity of the material at a position (non-mutating).
 function get_source_velocity(position)
     if is_fire(position)
         #prograde equatorial circular orbit
-        Ω = sqrt(M)/(position[2]^(3/2) + α*M)
+        Ω = sqrt(M)/(position[2]^(3/2) + α*sqrt(M))
         D = position[2]^(3/2) - 3*M*sqrt(position[2]) + 2*α*sqrt(M)
         ut = (position[2]^(3/2) + α*sqrt(M))/(position[2]^(3/4)*sqrt(D))
         #uα = ut*[1,0,0,Ω]

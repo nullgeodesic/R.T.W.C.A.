@@ -9,9 +9,9 @@ const M = 1.0f0
 const r_s = 2*M
 #r > r_s
 #Spin (angular momentum of BH per unit mass)
-#const α = 0.998f0 * r_s/2
-const α = 0.998f0 * r_s/2
-#const α = 0.0f0 * r_s/2
+#const α = 0.5f0 * M
+const α = 0.998f0 * M
+#const α = 0.0f0 * M
 # 0 <= |a| < 1
 #event horizon (different for a spinning BH)
 const r_ev = r_s/2 + sqrt((r_s^2 / 4) - α^2)
@@ -38,6 +38,18 @@ const r_ISCO_prograde,r_ISCO_retrograde,r_ph_prograde,r_ph_retrograde = calc_orb
 
 
 """
+Calculates the speed of a timelike object in a stable equatorial circular orbit relative to the
+FIDO at the location.
+"""
+function calc_circ_geod_beta(r::Real)
+    #θ = π/2
+    Δ = r^2 - r*r_s + α^2
+    β = sqrt(M)*(r^2 - 2*α*sqrt(M*r) + α^2)/(sqrt(Δ)*(r^(3/2) + α*sqrt(M)))
+    return β
+end
+
+
+"""
 Calculates values that show up a lot.
 """
 @inline function calc_metric_params(position)
@@ -54,7 +66,7 @@ Calculates the metric-matrix g_ij at a position (mutating).
 @inline function calc_lower_metric!(position,g)
     Σ,Δ,A = calc_metric_params(position)
     g[1,1] = -(1.0f0 - r_s*position[2]/Σ)
-    g[1,4] = -2*r_s*α*position[2]*sin(position[3])^2/Σ
+    g[1,4] = -r_s*α*position[2]*sin(position[3])^2/Σ
     g[4,1] = g[1,4]
     g[2,2] = Σ/Δ
     g[3,3] = Σ
@@ -68,13 +80,13 @@ Calculates the metric-matrix g_ij at a position (non-mutating).
 """
 function calc_lower_metric(position)
     g = Matrix{Float64}(I,4,4)
-    Σ,Δ,A = calc_metric_params(position)
-    g[1,1] = -(1 - r_s*position[2]/Σ)
-    g[1,4] = -2*r_s*α*position[2]*sin(position[3])^2/Σ
+    Σ,Δ,A = calc_metric_params(Array{Float64}(position))
+    g[1,1] = -(1 - r_s*Float64(position[2])/Σ)
+    g[1,4] = -r_s*α*Float64(position[2])*sin(Float64(position[3]))^2/Σ
     g[4,1] = g[1,4]
     g[2,2] = Σ/Δ
     g[3,3] = Σ
-    g[4,4] = (A/Σ)*sin(position[3])^2
+    g[4,4] = (A/Σ)*sin(Float64(position[3]))^2
     return g
 end
 
@@ -86,10 +98,10 @@ function calc_vierbein(position)
     vierbein = Matrix{Float64}(I,4,4)
     Σ,Δ,A = calc_metric_params(position)
     vierbein[1,1] = sqrt(Σ*Δ/A)
-    vierbein[4,1] = -(A/r_s*α*position[2])*vierbein[1,1]
     vierbein[2,2] = sqrt(Σ/Δ)
     vierbein[3,3] = sqrt(Σ)
     vierbein[4,4] = sqrt(A/Σ)*sin(position[3])
+    vierbein[4,1] = -(r_s*α*position[2]/A)*vierbein[4,4]
     return vierbein
 end
 
@@ -101,12 +113,13 @@ function calc_inv_vierbein(position)
     inv_vierbein = Matrix{Float64}(I,4,4)
     Σ,Δ,A = calc_metric_params(position)
     inv_vierbein[1,1] = sqrt(A/(Σ*Δ))
-    inv_vierbein[1,4] = (r_s*α*position[2]/A)*inv_vierbein[1,1]
+    inv_vierbein[4,1] = (r_s*α*position[2]/A)*inv_vierbein[1,1]
     inv_vierbein[2,2] = sqrt(Δ/Σ)
     inv_vierbein[3,3] = inv(sqrt(Σ))
     inv_vierbein[4,4] = sqrt(Σ/A)/sin(position[3])
     return inv_vierbein
 end
+
 
 
 """
@@ -187,10 +200,10 @@ Determines if the ray is near a coordinate singularity.
 
     #check if near θ = 0
     if abs(θ_new) <= abs_tol[3]
-        return true, 2*abs(ray[3])/(abs(ray[7]*9) + no_div_zero)
+        return true, 2*abs(ray[3])/(abs(ray[7]*37) + no_div_zero)
     #check if near θ = π
     elseif abs(θ_new - π) <= abs_tol[3]
-        return true, 2*abs((ray[3] - π)/(abs(ray[7]*9) + no_div_zero))
+        return true, 2*abs((ray[3] - π)/(abs(ray[7]*37) + no_div_zero))
 """
     #check if near r = 0
     elseif abs(new_r) <= abs_tol[2]

@@ -76,10 +76,12 @@ function gen_final_rotation_matrix(direction=[0,0])
         #transpose to give proper handedness
         R = transpose(R)
         #compensate for unintended roll induced by the transformation
+        #plus a factor of π/2 for some reason I forgot.
         R = R*gen_intrinsic_rotation_matrix([0,0,π/2 + direction[2]])
     else
         #println("Final Rotation: Camera velocity already aligned with FIDO z-axis; returning identity matrix")
-        R = Matrix{Float64}(I,4,4)
+        #plus a factor of π/2 for some reason I forgot.
+        R = Matrix{Float64}(I,4,4)*gen_intrinsic_rotation_matrix([0,0,π/2 + direction[2]])
     end
     return R
 end

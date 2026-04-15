@@ -20,9 +20,10 @@ Calculates the derivative of the ray with respect to affine parameter (mutating)
                 a -= calc_christoffel_udd(Ray,(i-4,j-4,k-4))*Ray[j]*Ray[k]
             end
         end
-        if abs(a) > 1f9
-            a=1f9
-        end
+        #uncomment to fail quietly  at singularities/edge cases
+        #if !(abs(a) < 1f9)
+            #a = 0f0
+        #end
         slope[i] = a
     end
 
@@ -38,6 +39,10 @@ Calculates the derivative of the ray with respect to affine parameter (mutating)
         end
         freq_shift -= source_vel[j] * part_sum
     end
+    #uncomment to fail quietly  at singularities/edge cases
+    #if !(1f-9 < abs(freq_shift) < 1f9)
+        #freq_shift = 1f0
+    #end
     for i in 9:(raylength - n_bundle_param)
         if isodd(i)
             ν = colors_freq[ceil(Int,(i-8)/2)]*freq_shift
@@ -50,6 +55,10 @@ Calculates the derivative of the ray with respect to affine parameter (mutating)
             #(+lambda) to get to the camera (Younsi et. al. 2012)
             slope[i] = -inv(freq_shift)*calc_spectral_absorbtion_coeficient(Ray,ν)
         end
+    end
+    #note: in the future I will add the proper ray bundle integration equations
+    for i in (raylength - n_bundle_param + 1):raylength
+        slope[i] = 0
     end
     return nothing
 end
@@ -80,7 +89,7 @@ Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
             println("Bad Numbers Warning! ", Ray[1:8], " ",threadid())
         end
         """
-        for i in 1:8
+        for i in 1:36
             if !calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
                 calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param)
                 #Ray -= temp_stepsize*k1
@@ -106,7 +115,7 @@ Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
         #then hand the ray back to the normal Runge-Kutta integrator
         calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param)
 
-        @views stepsize = -pad_max_dt(Ray, max_dt_scale)
+        stepsize = -pad_max_dt(Ray, max_dt_scale)
     end
 
     for i in 1:raylength

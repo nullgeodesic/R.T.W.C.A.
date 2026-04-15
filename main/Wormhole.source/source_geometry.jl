@@ -135,10 +135,10 @@ Determines if the ray is near a coordinate singularity.
 
     #check if near θ = 0
     if abs(θ_new) <= abs_tol[3]
-        return true, 2*abs(ray[3])/(abs(ray[7]*9) + no_div_zero)
+        return true, 2*abs(ray[3])/(abs(ray[7]*37) + no_div_zero)
     #check if near θ = π
     elseif abs(θ_new - π) <= abs_tol[3]
-        return true, 2*abs((ray[3] - π)/(abs(ray[7]*9) + no_div_zero))
+        return true, 2*abs((ray[3] - π)/(abs(ray[7]*37) + no_div_zero))
     else
         return false, stepsize
     end

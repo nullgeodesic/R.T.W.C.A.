@@ -96,14 +96,14 @@ Determines if the ray is near a coordinate singularity.
     new_r = ray[2]+dr
 
     #check if near θ = 0
-    if abs(θ_new) <= abs_tol[3]
-        return true, 2*abs(ray[3])/(abs(ray[7]*9) + no_div_zero)
+    if abs(θ_new) <= 10*abs_tol[3]/(abs(new_r + no_div_zero))
+        return true, 2*abs(ray[3])/(abs(ray[7]*37) + no_div_zero)
     #check if near θ = π
-    elseif abs(θ_new - π) <= abs_tol[3]
-        return true, 2*abs((ray[3] - π)/(abs(ray[7]*9) + no_div_zero))
+    elseif abs(θ_new - π) <= 10*abs_tol[3]/(abs(new_r + no_div_zero))
+        return true, 2*abs((ray[3] - π)/(abs(ray[7]*37) + no_div_zero))
     #check if near r = 0
-    elseif abs(new_r) <= abs_tol[2]
-        return true, 2*(abs_tol[2])/(abs(ray[6]*9) + no_div_zero)
+    elseif abs(new_r) <= 100*abs_tol[2]
+        return true, 2*(abs_tol[2])/(abs(ray[6]*37) + no_div_zero)
     else
         return false, stepsize
     end

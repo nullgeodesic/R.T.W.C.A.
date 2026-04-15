@@ -60,12 +60,12 @@ end
 Calculates the I_λs from a ray.
 """
 function ray_to_I_λ(ray,colors,colors_freq)
-    n_colors=length(colors)
-    I_λs=zeros(n_colors)
+    n_colors = length(colors)
+    I_λs = zeros(n_colors)
     for i in 1:n_colors
         #I_λ=I_nu *c/λ^2, where c=λ*nu
         #since colors are in nm, this gives the spectral radiance in W sr^-1 m^-2 nm^-1
-        I_λs[i]=ray[7+2*i]*colors_freq[i]^3*c/colors[i]^2
+        I_λs[i] = ray[7+2*i]*colors_freq[i]^3*c/colors[i]^2
     end
     return I_λs
 end
@@ -76,7 +76,7 @@ Calculates the xyY colorspace coordinates of a ray from it's spectrum.
 """
 function calc_xyY(ray,colors,colors_freq)
     I_λs = ray_to_I_λ(ray,colors,colors_freq)
-    
+
     I_interpolation = linear_interpolation(colors,I_λs)
     
     delXYZ(λ,p) = I_interpolation(λ)*[cie_x(λ),cie_y(λ),cie_z(λ)]

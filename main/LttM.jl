@@ -11,7 +11,7 @@ Runs the integration loop for a single pixel, then calculates it's xyY colorspac
 function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,
                     max_steps,n_bundle_param::Int,skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
     #integrate ray
-    dt=starting_timestep
+    dt = starting_timestep
 
     #various 'buffers' to drastically reduce memory allocations
     source_vel = [0.0,0.0,0.0,0.0]
@@ -35,15 +35,15 @@ function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylen
     step_count=0
     
     while raytrace
-        dt,rejected=RKDP_Step_w_buffer!(ray,y,last_slope,next_slope,raylength,dt,colors_freq,
+        dt,rejected = RKDP_Step_w_buffer!(ray,y,last_slope,next_slope,raylength,dt,colors_freq,
                                                          abs_tol, rel_tol,rejected,max_dt_scale,buffer,
                                                          k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param)
-        step_count+=1
+        step_count += 1
 
         #my current termination condition
         if calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,
                           max_dt_scale, max_steps,step_count)
-            raytrace=false
+            raytrace = false
         end
     end
     skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param,skybox1,skybox1_pix_height,skybox2,

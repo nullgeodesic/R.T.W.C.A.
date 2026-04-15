@@ -61,7 +61,12 @@ Runs the integration loop for a single pixel.
         #my current termination condition
         if calc_terminate(ray,dt,colors_freq,raylength,abs_tol,rel_tol,
                           max_dt_scale, max_steps,step_count)
-            raytrace=false
+            raytrace = false
+        end
+        for i in 1:raylength
+            if isnan(ray[i])
+                raytrace = false
+            end
         end
     end
 end
@@ -209,6 +214,16 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     #Bring back the integrated rays to the host
     long_ray_matrix = Array(Cu_ray_matrix)
 
+    """
+    found_NaN = false
+    for i in 1:(size(long_ray_matrix,1))
+        if find_NaN(long_ray_matrix[i,:]) && !(found_NaN)
+            println(long_ray_matrix[i,1:8])
+            #found_NaN = true
+        end
+    end
+    """
+    
     #load textures
     #unfortunately, they can't be held in global memory due to memory leaks
     skybox1,skybox1_pix_height,skybox2,skybox2_pix_height = load_textures()
