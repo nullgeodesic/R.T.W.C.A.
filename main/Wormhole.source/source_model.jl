@@ -34,7 +34,7 @@ function calc_planck_Hz(T,ν)
 end
 
 """
-Gives the temperature at a position in Kelvin.
+Gives the temperature at a position in Kelvin (unused).
 """
 @inline function get_temp(ray)
     if ray[2] > 0
@@ -60,20 +60,13 @@ end
 
 
 """
-Calculates the spectral emission coeficient for a BB radiator.
+Calculates the spectral radiative coefficients for a BB radiator.
 """
-@inline function calc_spectral_emission_coeficient(ray,fluid_params,frequency)
+@inline function calc_radiative_coefficients(ray,fluid_params,frequency)
     #do nothing since no fluid anywhere
-    return 0.0f0
-end
-
-
-"""
-Calculates the spectral absorbption coeficient.
-"""
-@inline function calc_spectral_absorbtion_coeficient(ray,fluid_params,frequency)
-    #do nothing since no fluid anywhere
-    return 0.0f0
+    a_ν = 0.0f0
+    j_ν = 0.0f0
+    return a_ν,j_ν
 end
 
 

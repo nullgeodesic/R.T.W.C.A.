@@ -57,27 +57,18 @@ end
 
 
 """
-Calculates the spectral emission coeficient for a BB radiator.
+Calculates the spectral radiative coefficients for a BB radiator.
 """
-@inline function calc_spectral_emission_coeficient(ray,fluid_params,frequency)
-    #j_nu = a_nu*B_nu for thermal emission
-    #units are m^-1 with default scale
-    j_nu = calc_spectral_absorbtion_coeficient(ray,fluid_params,frequency)*calc_planck(fluid_params[1],frequency)
-    return j_nu
-end
-
-
-"""
-Calculates the spectral absorbption coeficient.
-"""
-@inline function calc_spectral_absorbtion_coeficient(ray,fluid_params,frequency)
-    #units are 1/M
-    a_nu = 1/map_scale
+@inline function calc_radiative_coefficients(ray,fluid_params,frequency)
     if is_fire(ray)
-        return a_nu
+        #a_ν units are 1/map_scale
+        a_ν = 1.0f0/map_scale
+        j_ν = a_ν*calc_planck(fluid_params[1],frequency)
     else
-        return 0.0f0
+        a_ν = 0.0f0
+        j_ν = 0.0f0
     end
+    return a_ν,j_ν
 end
 
 

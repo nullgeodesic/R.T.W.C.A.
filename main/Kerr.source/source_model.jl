@@ -49,6 +49,22 @@ end
 
 
 """
+Calculates the spectral radiative coefficients for a BB radiator.
+"""
+@inline function calc_radiative_coefficients(ray,fluid_params,frequency)
+    if is_fire(ray)
+        #a_ν units are 1/map_scale
+        a_ν = 1f-1/Float32(map_scale)
+        j_ν = a_ν*calc_planck(fluid_params[1],frequency)
+    else
+        a_ν = 0.0f0
+        j_ν = 0.0f0
+    end
+    return a_ν,j_ν
+end
+
+
+"""
 Calculates the spectral emission coeficient for a BB radiator.
 """
 @inline function calc_spectral_emission_coeficient(ray,fluid_params,frequency)
