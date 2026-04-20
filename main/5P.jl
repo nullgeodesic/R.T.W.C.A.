@@ -17,19 +17,21 @@ include("integrators_5P.jl")
 Runs the integration loop for a single pixel.
 """
 @inline function integrate_ray!(ray,starting_timestep,colors,colors_freq,::Val{raylength},
-                                abs_tol,rel_tol,max_dt_scale,max_steps,n_bundle_param) where raylength
+                                abs_tol,rel_tol,max_dt_scale,max_steps,n_bundle_param,
+                                ::Val{n_fluid_params}) where {raylength,n_fluid_params}
     #integrate ray
     dt = starting_timestep
     
     #various 'buffers' to drastically reduce memory allocations
     source_vel = @MVector zeros(Float32,4)
+    fluid_params = @MVector zeros(Float32,n_fluid_params)
     g = @MMatrix zeros(Float32,4,4)
     shared_slope = @MVector zeros(Float32,raylength)
     last_slope = @MVector zeros(Float32,raylength)
     next_slope = @MVector zeros(Float32,raylength)
 
     #calculate initial derivative
-    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g,n_bundle_param)
+    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g,n_bundle_param,fluid_params)
     @inbounds for i in 1:raylength
         last_slope[i] = shared_slope[i]
         next_slope[i] = shared_slope[i]
@@ -54,8 +56,8 @@ Runs the integration loop for a single pixel.
     while raytrace
         dt,rejected = RKDP_Step_w_buffer!(ray,y,last_slope,next_slope,raylength,dt,colors_freq,
                                                          abs_tol, rel_tol,rejected,max_dt_scale,buffer,
-                                                         k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param)
-        step_count+=1
+                                                         k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param,fluid_params)
+        step_count += 1
 
         
         #my current termination condition
@@ -63,18 +65,13 @@ Runs the integration loop for a single pixel.
                           max_dt_scale, max_steps,step_count)
             raytrace = false
         end
-        for i in 1:raylength
-            if isnan(ray[i])
-                raytrace = false
-            end
-        end
     end
 end
 
 
 function ray_kernel!(long_ray_matrix,colors,colors_freq,
                      ::Val{raylength},abs_tol,rel_tol,max_dt_scale,max_steps,
-                     num_pix,n_bundle_param) where raylength
+                     num_pix,n_bundle_param,::Val{n_fluid_params}) where {raylength,n_fluid_params}
     
     index = (blockIdx().x - 1) * blockDim().x + threadIdx().x    
     stride = gridDim().x * blockDim().x
@@ -88,7 +85,7 @@ function ray_kernel!(long_ray_matrix,colors,colors_freq,
         starting_timestep = -pad_max_dt(ray,max_dt_scale)
         
         integrate_ray!(ray,starting_timestep,colors,colors_freq,Val(raylength),abs_tol,rel_tol,max_dt_scale,
-                            max_steps,n_bundle_param)
+                            max_steps,n_bundle_param,Val(n_fluid_params))
         
         
         for j in 1:raylength
@@ -173,7 +170,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     abs_tol=fill(tolerance,raylength)
     rel_tol=fill(tolerance,raylength)
 
-
+    n_fluid_params = give_n_fluid_params()
 
     #transfer/transfrom data to Device
     Cu_ray_matrix = CuArray{Float32}(long_ray_matrix)
@@ -186,13 +183,15 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     """
     @device_code_llvm raw=true dump_module=true @cuda ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
                                                    Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
-                                                   Int32(max_steps),Int32(num_pix),n_bundle_param)
+                                                   Int32(max_steps),Int32(num_pix),n_bundle_param,
+                                                   Val(n_fluid_params))
     """
     
     #compile the kernel and make the configuration
     Cu_ray_kernel! = @cuda launch=false ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
                                                    Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
-                                                   Int32(max_steps),Int32(num_pix),n_bundle_param)
+                                                    Int32(max_steps),Int32(num_pix),n_bundle_param,
+                                                    Val(n_fluid_params))
     config = launch_configuration(Cu_ray_kernel!.fun)
     threads = min(num_pix,config.threads)
     blocks = cld(num_pix,threads)
@@ -205,7 +204,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     CUDA.@sync begin
         Cu_ray_kernel!(Cu_ray_matrix,Cu_colors,Cu_colors_freq,
                                                    Val(raylength),Cu_abs_tol,Cu_rel_tol,Float32(max_dt_scale),
-                       Int32(max_steps),Int32(num_pix),n_bundle_param;
+                       Int32(max_steps),Int32(num_pix),n_bundle_param,Val(n_fluid_params);
                        threads, blocks)
     end
     end_time = time_ns()

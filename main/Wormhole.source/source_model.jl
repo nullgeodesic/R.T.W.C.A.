@@ -46,27 +46,34 @@ end
 
 
 """
+Calculates various fluid-related parameters for a given position and ray (mutating).
+"""
+@inline function calc_fluid_params!(fluid_params,Ray,source_vel,g)
+    #do nothing since no fluid anywhere
+    return nothing
+end
+
+
+function give_n_fluid_params()
+    return 1
+end
+
+
+"""
 Calculates the spectral emission coeficient for a BB radiator.
 """
-@inline function calc_spectral_emission_coeficient(ray,frequency)
-    #j_nu = a_nu*B_nu for thermal emission
-    #units are m^-1 with default scale
-    j_nu = calc_spectral_absorbtion_coeficient(ray,frequency)*calc_planck(get_temp(ray),frequency)
-    return j_nu
+@inline function calc_spectral_emission_coeficient(ray,fluid_params,frequency)
+    #do nothing since no fluid anywhere
+    return 0.0f0
 end
 
 
 """
 Calculates the spectral absorbption coeficient.
 """
-@inline function calc_spectral_absorbtion_coeficient(ray,frequency)
-    #units are 1/M
-    a_nu = 1/map_scale
-    if is_fire(ray)
-        return a_nu
-    else
-        return 0.0f0
-    end
+@inline function calc_spectral_absorbtion_coeficient(ray,fluid_params,frequency)
+    #do nothing since no fluid anywhere
+    return 0.0f0
 end
 
 

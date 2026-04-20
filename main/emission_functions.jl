@@ -77,4 +77,13 @@ function gaunt_ei_therm_van_Hoof(gam2::Real,u::Real)
     return Gaunt
 end
 
+#Thermal Transrelativistic Synchrotron:
 
+#Thermal Relativistic Synchrotron:
+"""
+
+"""
+function j_ν_therm_rel_synch(f::Real,O::Real,sintheta::Real)
+    aaaaaaaaaaaa
+
+#Kappa Relativistic Synchrotron:

@@ -9,15 +9,17 @@ include("integrators_LttM.jl")
 Runs the integration loop for a single pixel, then calculates it's xyY colorspace value.
 """
 function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,
-                    max_steps,n_bundle_param::Int,skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
+                       max_steps,n_bundle_param::Int,skybox1,skybox1_pix_height,skybox2,skybox2_pix_height,
+                       n_fluid_params::Integer)
     #integrate ray
     dt = starting_timestep
 
     #various 'buffers' to drastically reduce memory allocations
     source_vel = [0.0,0.0,0.0,0.0]
+    fluid_params = zeros(Float64,n_fluid_params)
     g = Matrix{Float64}(I,4,4)
     shared_slope = Array{Float64}(undef,raylength)
-    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g,n_bundle_param)
+    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g,n_bundle_param,fluid_params)
     last_slope = copy(shared_slope)
     next_slope = copy(shared_slope)
     buffer = similar(shared_slope)
@@ -30,14 +32,14 @@ function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylen
     k6 = similar(shared_slope)
     k7 = similar(shared_slope)
     
-    raytrace=true
-    rejected=false
-    step_count=0
+    raytrace = true
+    rejected = false
+    step_count = 0
     
     while raytrace
         dt,rejected = RKDP_Step_w_buffer!(ray,y,last_slope,next_slope,raylength,dt,colors_freq,
                                                          abs_tol, rel_tol,rejected,max_dt_scale,buffer,
-                                                         k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param)
+                                          k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param,fluid_params)
         step_count += 1
 
         #my current termination condition
@@ -49,7 +51,7 @@ function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylen
     skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param,skybox1,skybox1_pix_height,skybox2,
                      skybox2_pix_height)
     #calculate pixel value
-    xyY_pix=calc_xyY(ray,colors,colors_freq)
+    xyY_pix = calc_xyY(ray,colors,colors_freq)
     return ray,xyY_pix
 end
 
@@ -60,13 +62,13 @@ Solves the rays given to it, feeding them into integrate_ray sequentialy.
 function ray_kernel(ray_bag,img_bundle,tolerance::Real,colors,colors_freq,
                               raylength::Integer,abs_tol,rel_tol,max_dt_scale::Real,max_steps::Real,
                     start_time::UInt64,n_bundle_param::Int,skybox1,skybox1_pix_height,skybox2,
-                    skybox2_pix_height)
+                    skybox2_pix_height,n_fluid_params)
     for i in 1:size(ray_bag,1)
         ray_bag[i,:],img_bundle[i] = integrate_ray(ray_bag[i,:],
                                                      -pad_max_dt(ray_bag[i,1:8],max_dt_scale),
                                                      tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,
                                                    max_dt_scale,max_steps,n_bundle_param,skybox1,
-                                                   skybox1_pix_height,skybox2,skybox2_pix_height)
+                                                   skybox1_pix_height,skybox2,skybox2_pix_height,n_fluid_params)
     end
     #println("Elapsed time (ns): ",time_ns()-start_time, "; Thread ID: ",threadid())
     
@@ -135,6 +137,8 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     long_ray_matrix = reshape(ray_matrix,(num_pix,raylength))
     long_xyY_img = reshape(xyY_img,num_pix)
 
+    n_fluid_params = give_n_fluid_params()
+
     #load textures
     #unfortunately, they can't be held in global memory due to memory leaks
     skybox1,skybox1_pix_height,skybox2,skybox2_pix_height = load_textures()
@@ -149,28 +153,28 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
                                     deepcopy(tolerance),deepcopy(colors),deepcopy(colors_freq),
                                     deepcopy(raylength),deepcopy(abs_tol),deepcopy(rel_tol),
                           deepcopy(max_dt_scale),deepcopy(max_steps),deepcopy(start_time),n_bundle_param,
-                          skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
+                          skybox1,skybox1_pix_height,skybox2,skybox2_pix_height,n_fluid_params)
     end
     finished_bundles=fetch.(tasks)
     end_time = time_ns()
     println("Integrator run time: "*string(round(((end_time - start_time)/1e9),digits = 2))*" s")
     
-    index_counter=1
+    index_counter = 1
     for i in 1:length(finished_bundles)
         for j in 1:size(finished_bundles[i][1],1)
             long_ray_matrix[index_counter,:]=finished_bundles[i][1][j,:]
             long_xyY_img[index_counter]=finished_bundles[i][2][j]
-            index_counter+=1
+            index_counter += 1
         end
     end
 
-    ray_matrix=reshape(long_ray_matrix,(x_pix,y_pix,raylength))
-    xyY_img=reshape(long_xyY_img,(x_pix,y_pix))
+    ray_matrix = reshape(long_ray_matrix,(x_pix,y_pix,raylength))
+    xyY_img = reshape(long_xyY_img,(x_pix,y_pix))
     #println(find_NaN(xyY_img))
     
     #check that any rays even hit anything, and return a blank image if they didn't
-    max_pixel_val=maxfinite(xyY_img)
-    if comp3(max_pixel_val)<=0
+    max_pixel_val = maxfinite(xyY_img)
+    if comp3(max_pixel_val) <= 0
         println("Image blank")
         if returnrays
             return zeros(RGB{N0f16},size(ray_matrix,2),size(ray_matrix,1)),ray_matrix
@@ -179,8 +183,8 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
         end
     end
     
-    #scale the image
-    scaler=scaleminmax(0,comp3(max_pixel_val))
+    #scale the image brightness
+    scaler = scaleminmax(0,comp3(max_pixel_val))
     for i in 1:size(xyY_img,1)
         for j in 1:size(xyY_img,2)
             xyY_img[i,j]=xyY{Float64}(comp1(xyY_img[i,j]),comp2(xyY_img[i,j]),scaler(comp3(xyY_img[i,j])))

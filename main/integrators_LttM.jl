@@ -6,7 +6,8 @@ Author: Levi Malmström
 """
 Calculates the derivative of the ray with respect to affine parameter (mutating).
 """
-function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel,g,n_bundle_param::Integer)
+function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel,g,n_bundle_param::Integer,
+                              fluid_params)
     #calculate derivative at a point
     for i in 1:4
         #dx/dl=v
@@ -30,31 +31,19 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
     #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
     get_source_velocity!(Ray,source_vel)
     calc_lower_metric!(Ray,g)
-    #using my own four loop instead of Julia's stock matrix multiplication
-    #freq_shift = -transpose(source_vel)*g*Ray[5:8]
-    freq_shift = 0
-    for j in 1:4
-        part_sum = 0
-        for i in 1:4
-            part_sum += g[i,j] * Ray[i+4]
-        end
-        freq_shift -= source_vel[j] * part_sum
-    end
-    #uncomment to fail quietly  at singularities/edge cases
-    #if !(1f-9 < abs(freq_shift) < 1f9)
-        #freq_shift = 1f0
-    #end
+    calc_fluid_params!(fluid_params,Ray,source_vel,g)
+    freq_shift = calc_freq_shift(Ray,source_vel,g)
     for i in 9:(raylength - n_bundle_param)
         if isodd(i)
             ν = colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the invariant brightness the ray "will" (hence the - sign) gain between here and
             #the camera (Younsi et. al. 2012)
-            slope[i] = -inv(freq_shift)*calc_spectral_emission_coeficient(Ray,ν)*exp(-Ray[i+1])/ν^3
+            slope[i] = -inv(freq_shift)*calc_spectral_emission_coeficient(Ray,fluid_params,ν)*exp(-Ray[i+1])/ν^3
         else
             ν = -colors_freq[ceil(Int,(i-8)/2)]*freq_shift
             #derivative of the optical depth which the ray "will" (hence the - sign) pass through in the "future"
             #(+lambda) to get to the camera (Younsi et. al. 2012)
-            slope[i] = -inv(freq_shift)*calc_spectral_absorbtion_coeficient(Ray,ν)
+            slope[i] = -inv(freq_shift)*calc_spectral_absorbtion_coeficient(Ray,fluid_params,ν)
         end
     end
     #note: in the future I will add the proper ray bundle integration equations
@@ -70,7 +59,8 @@ Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
 """
 function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
                              stepsize::Real,colors_freq, abs_tol,rel_tol,prev_rejected::Bool, max_dt_scale::Real,
-                             buffer,k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param::Integer)
+                             buffer,k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param::Integer,
+                             fluid_params)
     k1 = last_slope
     max_dt = pad_max_dt(Ray, max_dt_scale)
 
@@ -91,7 +81,8 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
         """
         for i in 1:36
             if !calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
-                calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param)
+                calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param, 
+                             fluid_params)
                 #Ray -= temp_stepsize*k1
                 for j in 1:raylength
                     Ray[j] -= temp_stepsize*k1[j]
@@ -113,7 +104,8 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
             return stepsize,false
         end
         #then hand the ray back to the normal Runge-Kutta integrator
-        calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param)
+        calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param, 
+                             fluid_params)
 
         stepsize = -pad_max_dt(Ray, max_dt_scale)
     end
@@ -124,33 +116,38 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
         buffer[i] = Ray[i] + stepsize*k1[i]*DP_Butcher[2,2]
     end
     #k2
-    calc_ray_derivative!(buffer,raylength,colors_freq,k2,source_vel,g,n_bundle_param)
+    calc_ray_derivative!(buffer,raylength,colors_freq,k2,source_vel,g,n_bundle_param, 
+                             fluid_params)
 
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[3,2] + k2[i]*DP_Butcher[3,3])
     end
     #k3
-    calc_ray_derivative!(buffer,raylength,colors_freq,k3,source_vel,g,n_bundle_param)
+    calc_ray_derivative!(buffer,raylength,colors_freq,k3,source_vel,g,n_bundle_param, 
+                             fluid_params)
 
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[4,2] + k2[i]*DP_Butcher[4,3] + k3[i]*DP_Butcher[4,4])
     end
     #k4
-    calc_ray_derivative!(buffer,raylength,colors_freq,k4,source_vel,g,n_bundle_param)
+    calc_ray_derivative!(buffer,raylength,colors_freq,k4,source_vel,g,n_bundle_param, 
+                             fluid_params)
 
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[5,2] + k2[i]*DP_Butcher[5,3] + k3[i]*DP_Butcher[5,4] +
             k4[i]*DP_Butcher[5,5])
     end
     #k5
-    calc_ray_derivative!(buffer,raylength,colors_freq,k5,source_vel,g,n_bundle_param)
+    calc_ray_derivative!(buffer,raylength,colors_freq,k5,source_vel,g,n_bundle_param, 
+                             fluid_params)
 
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[6,2] + k2[i]*DP_Butcher[6,3] + k3[i]*DP_Butcher[6,4] +
             k4[i]*DP_Butcher[6,5] + k5[i]*DP_Butcher[6,6])
     end
     #k6
-    calc_ray_derivative!(buffer,raylength,colors_freq,k6,source_vel,g,n_bundle_param)
+    calc_ray_derivative!(buffer,raylength,colors_freq,k6,source_vel,g,n_bundle_param, 
+                             fluid_params)
 
     #calculate the derivative to be used in the next calculation
     for i in 1:raylength
@@ -163,7 +160,8 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
         buffer[i] = Ray[i] + stepsize*next_slope[i]
     end
     #k7
-    calc_ray_derivative!(buffer,raylength,colors_freq,k7,source_vel,g,n_bundle_param)
+    calc_ray_derivative!(buffer,raylength,colors_freq,k7,source_vel,g,n_bundle_param, 
+                             fluid_params)
     
     #Calculating y's
     #y = Ray .+ stepsize .* next_slope

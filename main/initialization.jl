@@ -410,10 +410,10 @@ if runtests
         position, direction, pointing, β = initialize_world("kerr_boyer_lindquist")
         colors=range(350,step=30,stop=750)
         img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,
-                        x_pix=100,speed=β,camera_point = pointing,print_num_pix=true)
+                        x_pix=100,speed=β,camera_point = pointing,tolerance = 1e-5,print_num_pix=true)
         
         stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,
-                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,print_num_pix=true)
+                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,tolerance = 1e-5,print_num_pix=true)
         
         test_csv_ref = DataFrame(load("Test Results/TestResults.csv"))
         test_csv = copy(test_csv_ref)
