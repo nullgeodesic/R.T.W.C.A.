@@ -3,6 +3,7 @@
 
 set timeout 360
 
+
 #Sphere in cartesian coordinates (LttM)
 spawn julia -t auto
 expect "julia>"
@@ -139,6 +140,35 @@ expect "automated test:"
 send "yes\r"
 expect "e.g."
 send "kerr\r"
+expect "julia>"
+send "exit()\r"
+
+
+#Synchrotron test (LttM)
+expect ":main"
+spawn julia -t auto
+expect "julia>"
+send -- include("initialization.jl")\r
+expect "cpu or gpu"
+send "cpu\r"
+expect "automated test:"
+send "yes\r"
+expect "e.g."
+send "synch\r"
+expect "julia>"
+send "exit()\r"
+
+#Synchrotron test (5P)
+expect ":main"
+spawn julia -t auto
+expect "julia>"
+send -- include("initialization.jl")\r
+expect "cpu or gpu"
+send "gpu\r"
+expect "automated test:"
+send "yes\r"
+expect "e.g."
+send "synch\r"
 expect "julia>"
 send "exit()\r"
 

@@ -77,13 +77,11 @@ function gaunt_ei_therm_van_Hoof(gam2::Real,u::Real)
     return Gaunt
 end
 
-#Thermal Transrelativistic Synchrotron:
-
-#Thermal Relativistic Synchrotron:
-"""
-
-"""
-function j_ν_therm_rel_synch(f::Real,O::Real,sintheta::Real)
-    aaaaaaaaaaaa
-
-#Kappa Relativistic Synchrotron:
+#Power Law Synchrotron:
+function P_synch(p::Real,η::Real)
+    if η > 1e-9
+        return solve(IntegralProblem(j,(0,1),(p,η)),QuadGKJL();abstol=1e-3,reltol=1e-3).u
+    else
+        return NaN
+    end
+end

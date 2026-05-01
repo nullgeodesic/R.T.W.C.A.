@@ -17,8 +17,6 @@ const ħ = h/(2*pi)
 const c = 299792458
 #Boltzman Constant in J/K
 const k_B = 1.380649e-23
-#How many meters corespond to one unit of the map
-const map_scale = Float64(1)
 #Protects from dividing by zero in certain situations
 const no_div_zero = 1e-24
 #2h/c^2, but scaled to ν measured in 1/nm instead of Hz

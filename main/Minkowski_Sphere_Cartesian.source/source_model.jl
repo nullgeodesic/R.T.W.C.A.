@@ -3,7 +3,9 @@ Author: Levi Malmström
 """
 
 #CONSTANTS
-
+#How many meters corespond to one unit of the map
+#set to 1 because scale doesn't matter here
+const map_scale = 1f0
 
 function load_textures()
     #Skybox 1
@@ -46,7 +48,7 @@ end
 """
 Calculates various fluid-related parameters for a given position and ray (mutating).
 """
-@inline function calc_fluid_params!(fluid_params,Ray,source_vel,g)
+@inline function calc_fluid_params!(fluid_params,Ray,source_vel,g,freq_shift)
     #just give fluid temp in Kelvin
     fluid_params[1] = 5.778f3
     return nothing

@@ -31,15 +31,15 @@ Calculates the derivative of the ray with respect to affine parameter (mutating)
     #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
     get_source_velocity!(Ray,source_vel)
     calc_lower_metric!(Ray,g)
-    calc_fluid_params!(fluid_params,Ray,source_vel,g)
     freq_shift = calc_freq_shift(Ray,source_vel,g)
+    calc_fluid_params!(fluid_params,Ray,source_vel,g,freq_shift)
     for i in 9:2:(raylength - n_bundle_param)
         ν = colors_freq[ceil(Int,(i-8)/2)]*freq_shift
         a_ν,j_ν = calc_radiative_coefficients(Ray,fluid_params,ν)
         slope[i] = -inv(freq_shift)*j_ν*exp(-Ray[i+1])/ν^3
         slope[i+1] = -inv(freq_shift)*a_ν
     end
-    #note: in the future I will add the proper ray bundle integration equations
+    #note: in the future I will add the proper ray bundle integration equations (probably)
     for i in (raylength - n_bundle_param + 1):raylength
         slope[i] = 0
     end

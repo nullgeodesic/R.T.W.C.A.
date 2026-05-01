@@ -3,11 +3,9 @@ Author: Levi Malmström
 """
 
 #CONSTANTS
-#emission scale factor (to scale the rays at the end)
-#2h/c^2, but scaled to ν measured in 1/nm instead of Hz
-const emission_scale = 2*h*c*1e27
-#h/k_B in nm/K, instead of the normal s/K, because ν is in units of nm^-1, not Hz
-const ν_factor = h*c*1e9/k_B
+#How many meters corespond to one unit of the map
+#set to 1 because scale doesn't matter here
+const map_scale = 1f0
 
 
 function load_textures()
@@ -17,11 +15,11 @@ end
 
 
 """
-Planck function (ν in nm^-1).
+Planck function (f in nm^-1).
 """
-@inline function calc_planck(T,ν)
-    B_ν = emission_scale*ν^3/(exp(ν_factor*ν/T)-1)
-    return B_ν
+@inline function calc_planck(T,f)
+    B_f = emission_scale*f^3/(exp(f_factor*f/T)-1)
+    return B_f
 end
 
 """
@@ -44,7 +42,7 @@ end
 """
 Calculates various fluid-related parameters for a given position and ray (mutating).
 """
-@inline function calc_fluid_params!(fluid_params,Ray,source_vel,g)
+@inline function calc_fluid_params!(fluid_params,Ray,source_vel,g,freq_shift)
     #just give fluid temp in Kelvin
     fluid_params[1] = 5.778f3
     return nothing

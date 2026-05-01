@@ -1,7 +1,10 @@
 """
 Author: Levi Malmström
 """
-
+#CONSTANTS
+#How many meters corespond to one unit of the map
+#set to 1 because scale doesn't matter here
+const map_scale = 1f0
 
 function load_textures()
     #No skybox
@@ -36,7 +39,7 @@ end
 """
 Calculates various fluid-related parameters for a given position and ray (mutating).
 """
-@inline function calc_fluid_params!(fluid_params,Ray,source_vel,g)
+@inline function calc_fluid_params!(fluid_params,Ray,source_vel,g,freq_shift)
     #just give fluid temp in Kelvin
     fluid_params[1] = 5.778f3
     return nothing
@@ -61,32 +64,6 @@ Calculates the spectral radiative coefficients for a BB radiator.
         j_ν = 0.0f0
     end
     return a_ν,j_ν
-end
-
-
-"""
-Calculates the spectral emission coeficient for a BB radiator.
-"""
-@inline function calc_spectral_emission_coeficient(ray,fluid_params,frequency)
-    #j_nu = a_nu*B_nu for thermal emission
-    #units are m^-1 with default scale
-    j_nu = calc_spectral_absorbtion_coeficient(ray,fluid_params,frequency)*calc_planck(fluid_params[1],frequency)
-    return j_nu
-end
-
-
-"""
-Calculates the spectral absorbption coeficient.
-"""
-@inline function calc_spectral_absorbtion_coeficient(ray,fluid_params,frequency)
-    #units are 1/map_scale
-    a_nu = 1f-1/Float32(map_scale)
-    #a_nu = 1f0/Float32(map_scale)
-    if is_fire(ray)
-        return a_nu
-    else
-        return 0.0f0
-    end
 end
 
 

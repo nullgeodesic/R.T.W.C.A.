@@ -35,11 +35,13 @@ using CSVFiles
 #Pkg.add("StaticArrays")
 using StaticArrays
 using Base.Threads
+#Pkg.add("SpecialFunctions")
+using SpecialFunctions
 
 #load general modules
 include("gen_geometry.jl")
 include("color_theory.jl")
-include("special_functions.jl")
+include("my_special_functions.jl")
 include("64BitConstants.jl")
 include("32BitConstants.jl")
 
@@ -104,6 +106,16 @@ function initialize_world(input_string::String)
         
         pointing = [0.0,0.0,-π/2]
         
+        β = 0.0
+    elseif input_string == "synch"
+        include("Synchro_Test.source/source_main.jl")
+
+        position = [0.0,0.0,0.0,0.0]
+
+        direction = [0.0,0.0]
+
+        pointing = [pi/8,0.0,pi]
+
         β = 0.0
     elseif input_string == "minkowski_t,x,y,z_sphere"
         include("Minkowski_Sphere_Cartesian.source/source_main.jl")
@@ -406,33 +418,7 @@ if runtests
         save("Test Results/TestResults.csv",test_csv)
         save("Test Results/bh_simple_test_"*mode*".png",img)
 
-    elseif test_mode == "kerr"
-        position, direction, pointing, β = initialize_world("kerr_boyer_lindquist")
-        colors=range(350,step=30,stop=750)
-        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,
-                        x_pix=100,speed=β,camera_point = pointing,tolerance = 1e-5,print_num_pix=true)
-        
-        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,
-                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,tolerance = 1e-5,print_num_pix=true)
-        
-        test_csv_ref = DataFrame(load("Test Results/TestResults.csv"))
-        test_csv = copy(test_csv_ref)
-        
-        if mode == "LttM"
-            row = 9
-        elseif mode == "5P"
-            row = 10
-        end
 
-        test_csv[row,"Runtime (s)"] = stats.time
-        test_csv[row,"Allocations (bytes)"] = stats.bytes
-        test_csv[row,"GC Time (s)"] = stats.gctime
-        test_csv[row,"Compile Time (s)"] = stats.compile_time
-        test_csv[row,"Recompile Time (s)"] = stats.recompile_time
-        test_csv[row,"Updated"] = "TRUE"
-        save("Test Results/TestResults.csv",test_csv)
-        save("Test Results/kerr_"*mode*".png",img)
-        
     elseif test_mode == "wormhole"
         position, direction, pointing, β = initialize_world("wormhole")
         colors=range(350,step=30,stop=750)
@@ -459,5 +445,60 @@ if runtests
         test_csv[row,"Updated"] = "TRUE"
         save("Test Results/TestResults.csv",test_csv)
         save("Test Results/wormhole_test_"*mode*".png",img)
+
+    elseif test_mode == "kerr"
+        position, direction, pointing, β = initialize_world("kerr_boyer_lindquist")
+        colors=range(350,step=30,stop=750)
+        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,
+                        x_pix=100,speed=β,camera_point = pointing,tolerance = 1e-5,print_num_pix=true)
+        
+        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,
+                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,tolerance = 1e-5,print_num_pix=true)
+        
+        test_csv_ref = DataFrame(load("Test Results/TestResults.csv"))
+        test_csv = copy(test_csv_ref)
+        
+        if mode == "LttM"
+            row = 9
+        elseif mode == "5P"
+            row = 10
+        end
+
+        test_csv[row,"Runtime (s)"] = stats.time
+        test_csv[row,"Allocations (bytes)"] = stats.bytes
+        test_csv[row,"GC Time (s)"] = stats.gctime
+        test_csv[row,"Compile Time (s)"] = stats.compile_time
+        test_csv[row,"Recompile Time (s)"] = stats.recompile_time
+        test_csv[row,"Updated"] = "TRUE"
+        save("Test Results/TestResults.csv",test_csv)
+        save("Test Results/kerr_"*mode*".png",img)
+
+
+    elseif test_mode == "synch"
+        position, direction, pointing, β = initialize_world("synch")
+        colors=range(350,step=30,stop=750)
+        img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,max_dt_scale=1e-1,max_steps=1e4,
+                        x_pix=100,speed=β,camera_point = pointing,tolerance = 1e-5,print_num_pix=true)
+        
+        stats = @timed img = gen_image(camera_pos=position,colors=colors,camera_dir=direction,
+                                       max_dt_scale=1e-1,max_steps=1e4,x_pix=500,speed=β,camera_point = pointing,tolerance = 1e-5,print_num_pix=true)
+        
+        test_csv_ref = DataFrame(load("Test Results/TestResults.csv"))
+        test_csv = copy(test_csv_ref)
+        
+        if mode == "LttM"
+            row = 11
+        elseif mode == "5P"
+            row = 12
+        end
+
+        test_csv[row,"Runtime (s)"] = stats.time
+        test_csv[row,"Allocations (bytes)"] = stats.bytes
+        test_csv[row,"GC Time (s)"] = stats.gctime
+        test_csv[row,"Compile Time (s)"] = stats.compile_time
+        test_csv[row,"Recompile Time (s)"] = stats.recompile_time
+        test_csv[row,"Updated"] = "TRUE"
+        save("Test Results/TestResults.csv",test_csv)
+        save("Test Results/synch_"*mode*".png",img)
     end
 end

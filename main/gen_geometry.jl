@@ -373,13 +373,13 @@ end
 @inline function calc_freq_shift(Ray,source_vel,g)
     #using my own four loop instead of Julia's stock matrix multiplication
     #freq_shift = -transpose(source_vel)*g*Ray[5:8]
-    freq_shift = 0
+    freq_shift = 0.0f0
     for j in 1:4
-        part_sum = 0
+        part_sum = 0.0f0
         for i in 1:4
-            part_sum += g[i,j] * Ray[i+4]
+            part_sum += g[i,j]*Ray[i+4]
         end
-        freq_shift -= source_vel[j] * part_sum
+        freq_shift -= source_vel[j]*part_sum
     end
     #uncomment to fail quietly  at singularities/edge cases
     #if !(1f-9 < abs(freq_shift) < 1f9)
