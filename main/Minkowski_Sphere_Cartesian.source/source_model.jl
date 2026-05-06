@@ -176,15 +176,15 @@ function skybox_I_ν_calc(i::Integer,j::Integer,f::Real,skybox_num::Integer,skyb
                          skybox2_pix_height)
     #Note: pretending sRGB/Rec. 709 is the same as Rec. 2020 for this crude RGB to spectrum scheme
     #Also, j is flipped in the skybox to j_new =  3*skybox_pix_height + 1 - j
-    R = Float64(skybox1[3*skybox1_pix_height + 1 - j,i].r)
+    R = 1.0*Float64(skybox1[3*skybox1_pix_height + 1 - j,i].r)
     #λ = 630 nm; f = 0.001587 nm^-1
-    G = 0.5*Float64(skybox1[3*skybox1_pix_height + 1 - j,i].g)
+    G = 0.843*Float64(skybox1[3*skybox1_pix_height + 1 - j,i].g)
     #λ = 532 nm; f = 0.001879 nm^-1
-    B = 0.32*Float64(skybox1[3*skybox1_pix_height + 1 - j,i].b)
+    B = 0.914*Float64(skybox1[3*skybox1_pix_height + 1 - j,i].b)
     #λ = 467 nm; f = 0.002141 nm^-1
-    #line width ~ 10 nm
-    return 1e-12 * (R*Normal_Gauss(f,2e-5,0.001587) + G*Normal_Gauss(f,2e-5,0.001879) +
-        B*Normal_Gauss(f,2e-5,0.002141))
+    #line width artificially broadened to ~ 20 nm
+    return 1e-12*(R*Normal_Gauss(f,5e-5,0.001587) + G*Normal_Gauss(f,7e-5,0.001879) +
+        B*Normal_Gauss(f,9e-5,0.002141))
 end
 
 
@@ -396,7 +396,7 @@ function calc_skybox_I_ν_beam!(ray,freq_shift::Real,i::Integer,j::Integer,u::Re
     end
 
     for a in 9:2:(raylength - 11)
-        ray[a] = I_ν[ceil(Int,(a-8)/2)]
+        ray[a] += I_ν[ceil(Int,(a-8)/2)]
     end
 
     return nothing

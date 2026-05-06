@@ -99,13 +99,13 @@ end
 
 
 function color_kernel!(ray_bundle,img_bundle,colors,colors_freq,raylength::Integer,n_bundle_param::Integer,
-                       skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
+                       skybox1,skybox1_pix_height,skybox2,skybox2_pix_height,W_X,W_Y,W_Z)
     for i in 1:size(ray_bundle,1)
         @views ray = ray_bundle[i,:]
         skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param,skybox1,skybox1_pix_height,skybox2,
                          skybox2_pix_height)
         #calculate pixel value
-        img_bundle[i] = calc_xyY(ray,colors,colors_freq)
+        img_bundle[i] = calc_xyY(ray,colors,colors_freq,W_X,W_Y,W_Z)
     end
     return img_bundle
 end
@@ -226,6 +226,9 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     #load textures
     #unfortunately, they can't be held in global memory due to memory leaks
     skybox1,skybox1_pix_height,skybox2,skybox2_pix_height = load_textures()
+
+    #precompute integration weights
+    W_X,W_Y,W_Z = precompute_CIE_weights(colors)
     
     #Calculate the colors of pixels
     chunks = Iterators.partition(1:num_pix,cld(num_pix,100*nthreads()))
@@ -233,7 +236,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     tasks = map(chunks) do chunk
         @spawn color_kernel!(deepcopy(long_ray_matrix[chunk,:]),deepcopy(long_xyY_img[chunk]),
                              deepcopy(colors),deepcopy(colors_freq),raylength,n_bundle_param,
-                             skybox1,skybox1_pix_height,skybox2,skybox2_pix_height)
+                             skybox1,skybox1_pix_height,skybox2,skybox2_pix_height,W_X,W_Y,W_Z)
     end
     finished_bundles = fetch.(tasks)
     index_counter = 1

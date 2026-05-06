@@ -10,7 +10,7 @@ Runs the integration loop for a single pixel, then calculates it's xyY colorspac
 """
 function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,
                        max_steps,n_bundle_param::Int,skybox1,skybox1_pix_height,skybox2,skybox2_pix_height,
-                       n_fluid_params::Integer)
+                       n_fluid_params::Integer,W_X,W_Y,W_Z)
     #integrate ray
     dt = starting_timestep
 
@@ -51,7 +51,7 @@ function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylen
     skybox_handling!(ray,raylength,colors,colors_freq,n_bundle_param,skybox1,skybox1_pix_height,skybox2,
                      skybox2_pix_height)
     #calculate pixel value
-    xyY_pix = calc_xyY(ray,colors,colors_freq)
+    xyY_pix = calc_xyY(ray,colors,colors_freq,W_X,W_Y,W_Z)
     return ray,xyY_pix
 end
 
@@ -62,13 +62,14 @@ Solves the rays given to it, feeding them into integrate_ray sequentialy.
 function ray_kernel(ray_bag,img_bundle,tolerance::Real,colors,colors_freq,
                               raylength::Integer,abs_tol,rel_tol,max_dt_scale::Real,max_steps::Real,
                     start_time::UInt64,n_bundle_param::Int,skybox1,skybox1_pix_height,skybox2,
-                    skybox2_pix_height,n_fluid_params)
+                    skybox2_pix_height,n_fluid_params,W_X,W_Y,W_Z)
     for i in 1:size(ray_bag,1)
         ray_bag[i,:],img_bundle[i] = integrate_ray(ray_bag[i,:],
                                                      -pad_max_dt(ray_bag[i,1:8],max_dt_scale),
                                                      tolerance,colors,colors_freq,raylength,abs_tol,rel_tol,
                                                    max_dt_scale,max_steps,n_bundle_param,skybox1,
-                                                   skybox1_pix_height,skybox2,skybox2_pix_height,n_fluid_params)
+                                                   skybox1_pix_height,skybox2,skybox2_pix_height,n_fluid_params
+                                                   ,W_X,W_Y,W_Z)
     end
     #println("Elapsed time (ns): ",time_ns()-start_time, "; Thread ID: ",threadid())
     
@@ -142,6 +143,9 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
     #load textures
     #unfortunately, they can't be held in global memory due to memory leaks
     skybox1,skybox1_pix_height,skybox2,skybox2_pix_height = load_textures()
+
+    #precompute integration weights
+    W_X,W_Y,W_Z = precompute_CIE_weights(colors)
     
     start_time = time_ns()
 
@@ -153,7 +157,7 @@ function gen_image(;camera_pos=[0,0,0,0],camera_dir=[0.0,0.0],speed=0.0::Real,
                                     deepcopy(tolerance),deepcopy(colors),deepcopy(colors_freq),
                                     deepcopy(raylength),deepcopy(abs_tol),deepcopy(rel_tol),
                           deepcopy(max_dt_scale),deepcopy(max_steps),deepcopy(start_time),n_bundle_param,
-                          skybox1,skybox1_pix_height,skybox2,skybox2_pix_height,n_fluid_params)
+                          skybox1,skybox1_pix_height,skybox2,skybox2_pix_height,n_fluid_params,W_X,W_Y,W_Z)
     end
     finished_bundles=fetch.(tasks)
     end_time = time_ns()

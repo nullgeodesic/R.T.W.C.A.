@@ -1,6 +1,11 @@
 """
 Author: Levi Malmström
 """
+#Rgb spectral scales
+#R = 1.0,630nm,σ=2e-5
+#G = 0.7765,532nm,σ=2e-5
+#B = 0.7613,467nm,σ=2e-5
+
 
 #Color match function fit values
 const cie_matrix=[
@@ -70,11 +75,11 @@ function ray_to_I_λ(ray,colors,colors_freq)
     return I_λs
 end
 
-#slow but much more accurate method
+#slow but accurate method
 """
 Calculates the xyY colorspace coordinates of a ray from it's spectrum.
-"""
-function calc_xyY(ray,colors,colors_freq)
+
+function calc_xyY(ray,colors,colors_freq,W_X,W_Y,W_Z)
     I_λs = ray_to_I_λ(ray,colors,colors_freq)
 
     I_interpolation = linear_interpolation(colors,I_λs)
@@ -82,7 +87,7 @@ function calc_xyY(ray,colors,colors_freq)
     delXYZ(λ,p) = I_interpolation(λ)*[cie_x(λ),cie_y(λ),cie_z(λ)]
     domain = (minimum(colors),maximum(colors))
     prob = IntegralProblem(delXYZ,domain)
-    CIEXYZ = solve(prob,QuadGKJL();reltol=1e-3,abstol=1e-3)   
+    CIEXYZ = solve(prob,QuadGKJL();reltol=1e-6,abstol=1e-6)   
     if CIEXYZ[1] != 0 && CIEXYZ[2] != 0 && CIEXYZ[3] != 0
         CIEXYZ = XYZ{Float64}(CIEXYZ[1],CIEXYZ[2],CIEXYZ[3])
         CIExyY = xyY(CIEXYZ)
@@ -91,36 +96,47 @@ function calc_xyY(ray,colors,colors_freq)
     end
     return CIExyY
 end
-
-
-#fast but pretty inacurate method
 """
-Calculates the xyY colorspace coordinates of a ray from it's spectrum.
 
-function calc_xyY(ray,colors,colors_freq)
-    n_colors = length(colors)
-    I_λs = ray_to_I_λ(ray,colors,colors_freq)
-    CIE_Xs = copy(I_λs)
-    CIE_Ys = copy(I_λs)
-    CIE_Zs = copy(I_λs)
-    for i in 1:n_colors
-        CIE_Xs[i] *= cie_x(colors[i])
-        CIE_Ys[i] *= cie_y(colors[i])
-        CIE_Zs[i] *= cie_z(colors[i])
-    end
-    ProblemX = SampledIntegralProblem(CIE_Xs, colors)
-    ProblemY = SampledIntegralProblem(CIE_Ys, colors)
-.    ProblemZ = SampledIntegralProblem(CIE_Zs, colors)
-    method = SimpsonsRule()
-    CIEX = solve(ProblemX,method).u
-    CIEY = solve(ProblemY,method).u
-    CIEZ = solve(ProblemZ,method).u
-    if CIEX != 0 && CIEY != 0 && CIEZ != 0
-        CIEXYZ = XYZ{Float64}(CIEX,CIEY,CIEZ)
-        CIExyY = xyY(CIEXYZ)
+
+# Define a standard tent function for linear interpolation
+function tent_function(λ, center, step)
+    distance = abs(λ - center)
+    if distance < step
+        return 1.0 - (distance / step)
     else
-        CIExyY = xyY{Float64}(1,1,0)
+        return 0.0
     end
-    return CIExyY
 end
+
+
+function precompute_CIE_weights(colors)
+    step = colors[2] - colors[1]
+    n = length(colors)
+    # Simpson's rule weights: 1/3, 4/3, 2/3, 4/3, ..., 1/3 (times step/2)
+    # For simplicity, trapezoidal weights are usually sufficient at 1 nm:
+    w = fill(1.0*step, n)
+    w[1] /= 2; w[end] /= 2  # trapezoidal endpoint correction
+
+    W_X = [cie_x(colors[i]) * w[i] for i in 1:n]
+    W_Y = [cie_y(colors[i]) * w[i] for i in 1:n]
+    W_Z = [cie_z(colors[i]) * w[i] for i in 1:n]
+    return W_X, W_Y, W_Z
+end
+
 """
+Fast and accurate (I think) method
+"""
+function calc_xyY(ray, colors, colors_freq,W_X,W_Y,W_Z)
+    I_λs = ray_to_I_λ(ray, colors, colors_freq)
+    
+    CIEX = sum(I_λs[i] * W_X[i] for i in 1:length(colors))
+    CIEY = sum(I_λs[i] * W_Y[i] for i in 1:length(colors))
+    CIEZ = sum(I_λs[i] * W_Z[i] for i in 1:length(colors))
+    
+    if CIEX != 0 && CIEY != 0 && CIEZ != 0
+        return xyY(XYZ{Float64}(CIEX, CIEY, CIEZ))
+    else
+        return xyY{Float64}(1, 1, 0)
+    end
+end
