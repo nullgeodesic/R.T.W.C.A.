@@ -108,7 +108,7 @@ end
 """
 Velocity of the material at a position (mutating).
 """
-@inline function get_source_velocity!(position,source_vel_buffer)
+@inline function get_source_velocity!(position,source_vel_buffer,g)
     source_vel_buffer[1] = 1.0f0
     source_vel_buffer[2] = 0.0f0
     source_vel_buffer[3] = 0.0f0
@@ -120,8 +120,7 @@ end
 """
 Velocity of the material at a position (non-mutating).
 """
-function get_source_velocity(position)
-    #0.5c radial
+function get_source_velocity(position,g)
     return [1,0,0,0]
 end
 

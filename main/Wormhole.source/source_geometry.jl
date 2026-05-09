@@ -132,8 +132,6 @@ Determines if the ray is near a coordinate singularity.
 @inline function near_singularity(ray,stepsize::Real,abs_tol)
     dθ = stepsize*ray[7]
     θ_new = ray[3] + dθ
-    #new r ~ r
-    new_r = r_of_l(ray[2])
 
     #check if near θ = 0
     if abs(θ_new) <= 5*abs_tol[3]

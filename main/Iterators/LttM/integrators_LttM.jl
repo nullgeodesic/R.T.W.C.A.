@@ -29,8 +29,8 @@ function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_ve
     end
 
     #calculate the frequency of the ray in the source frame, by nu=E/hbar, E = -p * u
-    get_source_velocity!(Ray,source_vel)
     calc_lower_metric!(Ray,g)
+    get_source_velocity!(Ray,source_vel,g)
     freq_shift = calc_freq_shift(Ray,source_vel,g)
     calc_fluid_params!(fluid_params,Ray,source_vel,g,freq_shift)
     for i in 9:2:(raylength - n_bundle_param)

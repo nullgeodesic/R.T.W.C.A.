@@ -13,20 +13,29 @@ const synch_ab = Float32(2.8173e-24 * map_scale)
 #Jet electron density scale (10^7 electrons/m^3 = 10 electrons/cm^3)
 const ne_0 = 1f7
 
-#Power Law Synchrotron:
+#Power Law Synchrotron anisotropy function:
 synch_integrand(μ,p) = (1 + (p[2] - 1)*μ^2)^(-p[1]/2)
 function P_synch(p::Real,η::Real)
     
     if η > 1e-9
-        return solve(IntegralProblem(synch_integrand,(0,1),(p,η)),QuadGKJL();abstol=1e-3,reltol=1e-3).u
+        return solve(IntegralProblem(synch_integrand,(0,1),(p,η)),QuadGKJL();abstol=1e-9,reltol=1e-9).u
     else
         return NaN
     end
 end
+#Approximation of P_synch(p,0.01), decent accuracy up to p ~ 8.5:
+#relative error less than ~17% for p <~6.5
+#Fit values:
+const C_fit = +7.951834f-01
+const D_fit = +9.832989f-01
+const E_fit = -5.752283f-01
+@inline function Approx_P_synch(p::Real)
+    return exp(C_fit + E_fit*p)*p^(D_fit*p)
+end
 
 
 #Janky way of using P(p,η) from Tsunetoe 2025:
-const P_synch_const = Float32(inv(P_synch(2.5,0.01)))
+#const P_synch_const = Float32(inv(P_synch(15.0,0.01)))
 
 
 function load_textures()
@@ -142,7 +151,7 @@ Calculates various fluid-related parameters for a given position and ray (mutati
 """
 @inline function calc_fluid_params!(fluid_params,Ray,source_vel,g,freq_shift)
     #power law index p
-    fluid_params[1] = 2.5f0
+    fluid_params[1] = 2.5f0 #* min((1 + abs(Ray[4])/20),4.4f0)
     #Fluid frame electron γ_min
     fluid_params[2] = 3f1
     #Fluid frame electron γ_max
@@ -189,7 +198,7 @@ Calculates the spectral radiative coefficients for a BB radiator.
         a_ν *= 3^((p + 1)/2)*(p - 1f0)/(4*(γ_min^(1f0 - p) - γ_max^(1f0 - p)))
         a_ν *= gamma((3*p + 2)/12)*gamma((3*p + 22)/12)*(frequency/(fluid_params[6]*sintheta))^(-(p + 2f0)/2)
         #anisotropic distribution modification (Tsunetoe 2025)
-        Φ = P_synch_const*(1 -0.99f0*cos2theta)^(-p/2)
+        Φ = inv(Approx_P_synch(p))*(1 -0.99f0*cos2theta)^(-p/2)
         j_ν *= Φ
         a_ν *= Φ
         
@@ -225,7 +234,7 @@ end
 """
 Velocity of the material at a position (mutating).
 """
-@inline function get_source_velocity!(position,source_vel_buffer)
+@inline function get_source_velocity!(position,source_vel_buffer,g)
     source_vel_buffer[1] = 1.0f0
     source_vel_buffer[2] = 0.0f0
     source_vel_buffer[3] = 0.0f0
@@ -237,7 +246,7 @@ end
 """
 Velocity of the material at a position (non-mutating).
 """
-function get_source_velocity(position)
+function get_source_velocity(position,g)
     return [1.0f0,0.0f0,0.0f0,0.0f0]
 end
 

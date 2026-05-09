@@ -2,9 +2,9 @@
 Author: Levi Malmström
 """
 #Rgb spectral scales
-#R = 1.0,630nm,σ=2e-5
-#G = 0.7765,532nm,σ=2e-5
-#B = 0.7613,467nm,σ=2e-5
+#R = 
+#G = 
+#B = 
 
 
 #Color match function fit values
@@ -73,40 +73,6 @@ function ray_to_I_λ(ray,colors,colors_freq)
         I_λs[i] = ray[7+2*i]*colors_freq[i]^3*c/colors[i]^2
     end
     return I_λs
-end
-
-#slow but accurate method
-"""
-Calculates the xyY colorspace coordinates of a ray from it's spectrum.
-
-function calc_xyY(ray,colors,colors_freq,W_X,W_Y,W_Z)
-    I_λs = ray_to_I_λ(ray,colors,colors_freq)
-
-    I_interpolation = linear_interpolation(colors,I_λs)
-    
-    delXYZ(λ,p) = I_interpolation(λ)*[cie_x(λ),cie_y(λ),cie_z(λ)]
-    domain = (minimum(colors),maximum(colors))
-    prob = IntegralProblem(delXYZ,domain)
-    CIEXYZ = solve(prob,QuadGKJL();reltol=1e-6,abstol=1e-6)   
-    if CIEXYZ[1] != 0 && CIEXYZ[2] != 0 && CIEXYZ[3] != 0
-        CIEXYZ = XYZ{Float64}(CIEXYZ[1],CIEXYZ[2],CIEXYZ[3])
-        CIExyY = xyY(CIEXYZ)
-    else
-        CIExyY = xyY{Float64}(1,1,0)
-    end
-    return CIExyY
-end
-"""
-
-
-# Define a standard tent function for linear interpolation
-function tent_function(λ, center, step)
-    distance = abs(λ - center)
-    if distance < step
-        return 1.0 - (distance / step)
-    else
-        return 0.0
-    end
 end
 
 

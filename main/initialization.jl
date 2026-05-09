@@ -57,14 +57,14 @@ end
 
 if mode == "LttM"
     #CPU integration setup
-    include("LttM.jl")
+    include("Iterators/LttM/LttM.jl")
     #π in Float64
     const π = Float64(π)
     #Float64 constants
     using .BitConsts64
 elseif mode == "5P"
     #GPU integration setup
-    include("5P.jl")
+    include("Iterators/5P/5P.jl")
     #π in Float32
     const π = Float32(π)
     #Float32 constants

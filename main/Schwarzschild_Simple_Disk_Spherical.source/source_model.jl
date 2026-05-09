@@ -109,7 +109,7 @@ end
 """
 Velocity of the material at a position (mutating).
 """
-@inline function get_source_velocity!(position,source_vel_buffer)
+@inline function get_source_velocity!(position,source_vel_buffer,g)
     #M=1
     #Ω = sqrt(M/r^3)
     #ut = (1 - 3M/r)^(-1/2)
@@ -136,7 +136,7 @@ end
 """
 Velocity of the material at a position (non-mutating).
 """
-function get_source_velocity(position)
+function get_source_velocity(position,g)
     #M=1
     #Ω = sqrt(M/r^3)
     #ut = (1 - 3M/r)^(-1/2)
