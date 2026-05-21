@@ -159,7 +159,6 @@ function get_source_velocity(position,g)
         #uα = ut*[1,0,0,Ω]
         return [ut,0,0,ut*Ω]
     end
-
 end
 
 

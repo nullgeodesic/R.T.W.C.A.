@@ -144,7 +144,7 @@ expect "julia>"
 send "exit()\r"
 
 
-#Synchrotron test (LttM)
+#M87* (LttM)
 expect ":main"
 spawn julia -t auto
 expect "julia>"
@@ -154,11 +154,11 @@ send "cpu\r"
 expect "automated test:"
 send "yes\r"
 expect "e.g."
-send "synch\r"
+send "m87\r"
 expect "julia>"
 send "exit()\r"
 
-#Synchrotron test (5P)
+#M87* (5P)
 expect ":main"
 spawn julia -t auto
 expect "julia>"
@@ -168,7 +168,7 @@ send "gpu\r"
 expect "automated test:"
 send "yes\r"
 expect "e.g."
-send "synch\r"
+send "m87\r"
 expect "julia>"
 send "exit()\r"
 
