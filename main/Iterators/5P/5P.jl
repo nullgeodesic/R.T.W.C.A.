@@ -26,12 +26,13 @@ Runs the integration loop for a single pixel.
     source_vel = @MVector zeros(Float32,4)
     fluid_params = @MVector zeros(Float32,n_fluid_params)
     g = @MMatrix zeros(Float32,4,4)
+    Γ = @MArray zeros(Float32,4,4,4)
     shared_slope = @MVector zeros(Float32,raylength)
     last_slope = @MVector zeros(Float32,raylength)
     next_slope = @MVector zeros(Float32,raylength)
 
     #calculate initial derivative
-    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g,n_bundle_param,fluid_params)
+    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g,Γ,n_bundle_param,fluid_params)
     @inbounds for i in 1:raylength
         last_slope[i] = shared_slope[i]
         next_slope[i] = shared_slope[i]
@@ -56,7 +57,7 @@ Runs the integration loop for a single pixel.
     while raytrace
         dt,rejected = RKDP_Step_w_buffer!(ray,y,last_slope,next_slope,raylength,dt,colors_freq,
                                                          abs_tol, rel_tol,rejected,max_dt_scale,buffer,
-                                                         k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param,fluid_params)
+                                                         k2,k3,k4,k5,k6,k7,source_vel,g,Γ,n_bundle_param,fluid_params)
         step_count += 1
 
         

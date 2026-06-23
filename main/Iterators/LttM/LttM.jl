@@ -18,8 +18,11 @@ function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylen
     source_vel = [0.0,0.0,0.0,0.0]
     fluid_params = zeros(Float64,n_fluid_params)
     g = Matrix{Float64}(I,4,4)
+    Γ = zeros(Float64,4,4,4)
     shared_slope = Array{Float64}(undef,raylength)
-    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g,n_bundle_param,fluid_params)
+
+    #calculate initial derivative
+    calc_ray_derivative!(ray,raylength,colors_freq,shared_slope,source_vel,g,Γ,n_bundle_param,fluid_params)
     last_slope = copy(shared_slope)
     next_slope = copy(shared_slope)
     buffer = similar(shared_slope)
@@ -39,7 +42,7 @@ function integrate_ray(ray,starting_timestep,tolerance,colors,colors_freq,raylen
     while raytrace
         dt,rejected = RKDP_Step_w_buffer!(ray,y,last_slope,next_slope,raylength,dt,colors_freq,
                                                          abs_tol, rel_tol,rejected,max_dt_scale,buffer,
-                                          k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param,fluid_params)
+                                          k2,k3,k4,k5,k6,k7,source_vel,g,Γ,n_bundle_param,fluid_params)
         step_count += 1
 
         #my current termination condition

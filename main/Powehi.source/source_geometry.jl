@@ -256,3 +256,4 @@ If the ray is on a coordinate singularity.
         return false
     end
 end
+

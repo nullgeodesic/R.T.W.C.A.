@@ -6,19 +6,20 @@ Author: Levi Malmström
 """
 Calculates the derivative of the ray with respect to affine parameter (mutating).
 """
-function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel,g,n_bundle_param::Integer,
+function calc_ray_derivative!(Ray,raylength::Integer,colors_freq,slope,source_vel,g,Γ,n_bundle_param::Integer,
                               fluid_params)
     #calculate derivative at a point
     for i in 1:4
         #dx/dl=v
         slope[i] = Ray[i+4]
     end
+    calc_christoffel_udd!(Ray,Γ)
     for i in 5:8
         #geodesic equation
         a = 0
         for j in 5:8
             for k in 5:8
-                a -= calc_christoffel_udd(Ray,(i-4,j-4,k-4))*Ray[j]*Ray[k]
+                a -= Γ[i-4,j-4,k-4]*Ray[j]*Ray[k]
             end
         end
         #uncomment to fail quietly  at singularities/edge cases
@@ -52,7 +53,7 @@ Integrate the ray by one time step using the Runge-Kutta-Dormand-Prince Method.
 """
 function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
                              stepsize::Real,colors_freq, abs_tol,rel_tol,prev_rejected::Bool, max_dt_scale::Real,
-                             buffer,k2,k3,k4,k5,k6,k7,source_vel,g,n_bundle_param::Integer,
+                             buffer,k2,k3,k4,k5,k6,k7,source_vel,g,Γ,n_bundle_param::Integer,
                              fluid_params)
     k1 = last_slope
     max_dt = pad_max_dt(Ray, max_dt_scale)
@@ -74,7 +75,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
         """
         for i in 1:36
             if !calc_terminate(Ray,temp_stepsize,colors_freq,raylength,abs_tol,rel_tol,max_dt_scale,2,1)
-                calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param, 
+                calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,Γ,n_bundle_param, 
                              fluid_params)
                 #Ray -= temp_stepsize*k1
                 for j in 1:raylength
@@ -97,7 +98,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
             return stepsize,false
         end
         #then hand the ray back to the normal Runge-Kutta integrator
-        calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,n_bundle_param, 
+        calc_ray_derivative!(Ray,raylength,colors_freq,k1,source_vel,g,Γ,n_bundle_param, 
                              fluid_params)
 
         stepsize = -pad_max_dt(Ray, max_dt_scale)
@@ -109,21 +110,21 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
         buffer[i] = Ray[i] + stepsize*k1[i]*DP_Butcher[2,2]
     end
     #k2
-    calc_ray_derivative!(buffer,raylength,colors_freq,k2,source_vel,g,n_bundle_param, 
+    calc_ray_derivative!(buffer,raylength,colors_freq,k2,source_vel,g,Γ,n_bundle_param, 
                              fluid_params)
 
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[3,2] + k2[i]*DP_Butcher[3,3])
     end
     #k3
-    calc_ray_derivative!(buffer,raylength,colors_freq,k3,source_vel,g,n_bundle_param, 
+    calc_ray_derivative!(buffer,raylength,colors_freq,k3,source_vel,g,Γ,n_bundle_param, 
                              fluid_params)
 
     for i in 1:raylength
         buffer[i] = Ray[i] + stepsize*(k1[i]*DP_Butcher[4,2] + k2[i]*DP_Butcher[4,3] + k3[i]*DP_Butcher[4,4])
     end
     #k4
-    calc_ray_derivative!(buffer,raylength,colors_freq,k4,source_vel,g,n_bundle_param, 
+    calc_ray_derivative!(buffer,raylength,colors_freq,k4,source_vel,g,Γ,n_bundle_param, 
                              fluid_params)
 
     for i in 1:raylength
@@ -131,7 +132,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
             k4[i]*DP_Butcher[5,5])
     end
     #k5
-    calc_ray_derivative!(buffer,raylength,colors_freq,k5,source_vel,g,n_bundle_param, 
+    calc_ray_derivative!(buffer,raylength,colors_freq,k5,source_vel,g,Γ,n_bundle_param, 
                              fluid_params)
 
     for i in 1:raylength
@@ -139,7 +140,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
             k4[i]*DP_Butcher[6,5] + k5[i]*DP_Butcher[6,6])
     end
     #k6
-    calc_ray_derivative!(buffer,raylength,colors_freq,k6,source_vel,g,n_bundle_param, 
+    calc_ray_derivative!(buffer,raylength,colors_freq,k6,source_vel,g,Γ,n_bundle_param, 
                              fluid_params)
 
     #calculate the derivative to be used in the next calculation
@@ -153,7 +154,7 @@ function RKDP_Step_w_buffer!(Ray,y,last_slope,next_slope,raylength::Integer,
         buffer[i] = Ray[i] + stepsize*next_slope[i]
     end
     #k7
-    calc_ray_derivative!(buffer,raylength,colors_freq,k7,source_vel,g,n_bundle_param, 
+    calc_ray_derivative!(buffer,raylength,colors_freq,k7,source_vel,g,Γ,n_bundle_param, 
                              fluid_params)
     
     #Calculating y's

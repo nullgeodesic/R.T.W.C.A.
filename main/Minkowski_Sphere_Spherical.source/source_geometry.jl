@@ -87,6 +87,28 @@ end
 
 
 """
+Calculates the Christoffel symbols of the second kind at a position (mutating).
+Note for future me: memory access patterns could probably be greatly improved here.
+"""
+@inline function calc_christoffel_udd!(position,Γ)
+    #No t affecting Christoffel symbols
+    #r Christoffel symbols
+    Γ[2,3,3] = -position[2]
+    Γ[2,4,4] = -position[2]*sin(position[3])^2
+    #θ Christoffel symbols
+    Γ[3,2,3] = inv(position[2] + no_div_zero)
+    Γ[3,3,2] = Γ[3,2,3]
+    Γ[3,4,4] = -sin(position[3])*cos(position[3])
+    #ϕ Christoffel symbols
+    Γ[4,2,4] = inv(position[2] + no_div_zero)
+    Γ[4,4,2] = Γ[4,2,4]
+    Γ[4,3,4] = cot(position[3])
+    Γ[4,4,3] = Γ[4,3,4]
+    return nothing
+end
+
+
+"""
 Determines if the ray is near a coordinate singularity.
 """
 @inline function near_singularity(ray,stepsize::Real,abs_tol)
