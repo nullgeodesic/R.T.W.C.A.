@@ -91,7 +91,7 @@ Calculates the Christoffel symbols of the second kind at a position (mutating).
 Note for future me: memory access patterns could probably be greatly improved here.
 """
 @inline function calc_christoffel_udd!(position,Γ)
-    #No t affecting Christoffel symbols
+    #No t-affecting Christoffel symbols
     #r Christoffel symbols
     Γ[2,3,3] = -position[2]
     Γ[2,4,4] = -position[2]*sin(position[3])^2
