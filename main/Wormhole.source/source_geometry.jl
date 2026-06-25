@@ -127,6 +127,30 @@ end
 
 
 """
+Calculates the Christoffel symbols of the second kind at a position (mutating).
+"""
+@inline function calc_christoffel_udd!(ray,Γ)
+    rl = r_of_l(ray[2])
+    drdl = dr_dl(ray[2])
+    θ = ray[3]
+    
+    #r Christoffel symbols
+    Γ[2,3,3] = -rl * drdl
+    Γ[2,4,4] = -rl * drdl * sin(θ)^2
+    #θ Christoffel symbols
+    Γ[3,2,3] = inv(rl) * drdl
+    Γ[3,3,2] = Γ[3,2,3]
+    Γ[3,4,4] = -sin(θ) * cos(θ)
+    #ϕ Christoffel symbols
+    Γ[4,2,4] = inv(rl) * drdl
+    Γ[4,4,2] = Γ[4,2,4]
+    Γ[4,3,4] = cot(θ)
+    Γ[4,4,3] = Γ[4,3,4]
+    return nothing
+end
+
+
+"""
 Determines if the ray is near a coordinate singularity.
 """
 @inline function near_singularity(ray,stepsize::Real,abs_tol)

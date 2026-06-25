@@ -106,23 +106,23 @@ end
 """
 Calculates the Christoffel symbols of the second kind at a position (mutating).
 """
-@inline function calc_christoffel_udd!(position,Γ)
+@inline function calc_christoffel_udd!(ray,Γ)
     #t Christoffel symbols
-    Γ[1,1,2] = r_s / (2*position[2]*(position[2] - r_s))
+    Γ[1,1,2] = r_s / (2*ray[2]*(ray[2] - r_s))
     Γ[1,2,1] = Γ[1,1,2]
     #r Christoffel symbols
-    Γ[2,1,1] = r_s*(position[2] - r_s) / (2*position[2]^3)
-    Γ[2,2,2] = -r_s / (2*position[2]*(position[2] - r_s))
-    Γ[2,3,3] = -(position[2] - r_s)
-    Γ[2,4,4] = -(position[2] - r_s) * sin(position[3])^2
+    Γ[2,1,1] = r_s*(ray[2] - r_s) / (2*ray[2]^3)
+    Γ[2,2,2] = -r_s / (2*ray[2]*(ray[2] - r_s))
+    Γ[2,3,3] = -(ray[2] - r_s)
+    Γ[2,4,4] = -(ray[2] - r_s) * sin(ray[3])^2
     #θ Christoffel symbols
-    Γ[3,2,3] = inv(position[2])
+    Γ[3,2,3] = inv(ray[2])
     Γ[3,3,2] = Γ[3,2,3]
-    Γ[3,4,4] = -sin(position[3]) * cos(position[3])
+    Γ[3,4,4] = -sin(ray[3]) * cos(ray[3])
     #ϕ Christoffel symbols
-    Γ[4,2,4] = inv(position[2])
+    Γ[4,2,4] = inv(ray[2])
     Γ[4,4,2] = Γ[4,2,4]
-    Γ[4,3,4] = cot(position[3])
+    Γ[4,3,4] = cot(ray[3])
     Γ[4,4,3] = Γ[4,3,4]
     return nothing
 end

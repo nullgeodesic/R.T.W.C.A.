@@ -57,6 +57,14 @@ end
 
 
 """
+Calculates the Christoffel symbols of the second kind at a position (mutating).
+"""
+@inline function calc_christoffel_udd!(ray,Γ)
+    return nothing
+end
+
+
+"""
 Determines if the ray is near a coordinate singularity.
 """
 @inline function near_singularity(ray,stepsize::Real,abs_tol)

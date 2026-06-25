@@ -192,9 +192,9 @@ end
 """
 Calculates the Christoffel symbols of the second kind at a position (mutating).
 """
-@inline function calc_christoffel_udd!(position,Γ)
-    r = Float32(position[2])
-    θ = Float32(position[3])
+@inline function calc_christoffel_udd!(ray,Γ)
+    r = Float32(ray[2])
+    θ = Float32(ray[3])
     Σ = r^2 + (α*cos(θ))^2
     Δ = r^2 - r*r_s + α^2
     A = (r^2 + α^2)*Σ + r_s*r*(α*sin(θ))^2
