@@ -62,7 +62,7 @@ to load the code for the Kerr scene and load the default camera parameters for t
 
         colors = range(350,step=30,stop=750)
 
-4. Choose your horizontal number of pixels. I recommend 100~200 for the CPU, and 500~2000 if you have a compatible GPU:
+4. Choose your horizontal number of pixels. I recommend 100-200 for the CPU, and 500-2000 if you have a compatible GPU:
 
         hor_pix = 500
 
